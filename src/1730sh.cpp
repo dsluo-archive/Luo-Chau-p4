@@ -5,6 +5,7 @@
 #include <iterator>
 #include <unistd.h>
 #include <string.h>
+#include <sys/wait.h>
 
 using namespace std;
 
@@ -14,9 +15,12 @@ void printprompt();
 int main() {
 
     string line;
+   
     printprompt();
     while (getline(cin, line)) {
         int pipe_count = 0;
+
+        bool append = false;
 
         string in = "STDIN_FILENO";
         string out = "STDOUT_FILENO";
@@ -30,19 +34,19 @@ int main() {
             if ((it + 1) != tokens.end()) {
                 if (*it == "e>") {
                     err = *(it + 1);
-                    err += " (truncate)";
+                    append = false; 
                     it++;
                 } else if (*it == "e>>") {
                     err = *(it + 1);
-                    err += " (append)";
+                    append = true; 
                     it++;
                 } else if (*it == ">") {
                     out = *(it + 1);
-                    out += " (truncate)";
+                    append = false; 
                     it++;
                 } else if (*it == ">>") {
                     out = *(it + 1);
-                    out += " (append)";
+                    append = true; 
                     it++;
                 } else if (*it == "<") {
                     in = *(it + 1);
@@ -57,13 +61,36 @@ int main() {
                 procs.push_back(proc);
             }
         }
-        
+       
         printprompt();
+        
+
+        int pid = fork();
+        int status;
+        if (pid == 0){
+            char **args = new char*[procs[0].size()];
+            int i = 0;
+            for (auto it = procs[0].begin(); it != procs[0].end(); it++){
+                args[i] = (char *) (*it).c_str(); 
+                i++;
+            }
+            args[i + 1] = nullptr;
+            
+            // populate arguments with char **
+            if (execvp(procs[0][0].c_str(), args) == -1){
+                perror(procs[0][0].c_str()); 
+            }
+            
+            delete[] args;
+        } else {
+            while (wait(&status) != pid){
+                // wait for child to complete 
+            }
+        }
     }
     printf("\n");
     return EXIT_SUCCESS;
-}
-
+} 
 void printprompt(){
     // figure out what the current working directory is. 
     long maxlen = pathconf(".", _PC_PATH_MAX);
