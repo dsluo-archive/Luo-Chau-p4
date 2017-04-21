@@ -98,9 +98,14 @@ vector<string> tokenize(string str) {
             output.push_back({""});
         } else if (*it == '"') {
             while (++it != str.end()) {
-                if (*it == '\\' && *(it + 1) == '"') {
-                    output.back().push_back('"');
-                    it++;
+                if (*it == '\\') {
+                    if (*(it + 1) == '"') {
+                        output.back().push_back('"');
+                        it++;
+                    } else if (*(it + 1) == '\\' || *(it + 1) == '\n') {
+                        output.back().push_back('\\');
+                        it++;
+                    }
                 } else if (*it == '"') {
                     break;
                 } else {
