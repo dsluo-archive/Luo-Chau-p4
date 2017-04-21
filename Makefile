@@ -1,7 +1,6 @@
 GCC = g++
-NFLAGS = -lncurses -lform -lmenu
-LFLAGS = -Wall -g $(NFLAGS)
-CFLAGS = -Wall -std=c++14 -g -O0 -pedantic-errors $(NFLAGS)
+LFLAGS = -Wall -g
+CFLAGS = -Wall -std=c++14 -g -O0 -pedantic-errors
 
 TARGET = 1730sh
 SRCDIR = ./src
