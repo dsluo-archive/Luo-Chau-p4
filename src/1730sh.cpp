@@ -108,7 +108,7 @@ void printprompt(){
    
     // Check the current working directory versus the home directory.
     printf("1730sh: ");
-    if (strlen(p) > strlen(homedir)){
+    if (strlen(p) >= strlen(homedir)){
         char *rpath = p + strlen(homedir);
         printf("~%s> ", rpath);   
     } else {
