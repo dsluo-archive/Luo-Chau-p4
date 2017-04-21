@@ -9,6 +9,7 @@
 
 using namespace std;
 
+char* trimwhitespace(char *str);
 vector<string> tokenize(string str);
 void printprompt();
 
@@ -74,7 +75,7 @@ int main() {
                 args[i] = (char *) (*it).c_str(); 
                 i++;
             }
-            args[i + 1] = nullptr;
+            args[i] = nullptr;
             
             // populate arguments with char **
             if (execvp(procs[0][0].c_str(), args) == -1){
@@ -151,3 +152,26 @@ vector<string> tokenize(string str) {
 
     return output;
 }
+
+/**
+ * trimwhitespace 
+ * @param str string literal to be cleaned of white spaces.
+ * @return a string without trailing whitespace (on either end). 
+ * Taken from here -> http://gist.github.com/alan-mushi/c8a6f34d1df18574f643/
+ */
+char* trimwhitespace(char *str){
+    char *end;
+    while (isspace(*str))
+        str++;
+
+    if (*str == 0)
+        return str;
+
+    end = str + strnlen(str, 128) - 1;
+    while (end > str && isspace(*end))
+        end--; 
+
+    *(end + 1) = '\0';
+    return str;
+}
+
