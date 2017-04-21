@@ -14,10 +14,8 @@ void printprompt();
 int main() {
 
     string line;
-    while (true) {
-        printprompt();
-        getline(cin, line);
-
+    printprompt();
+    while (getline(cin, line)) {
         int pipe_count = 0;
 
         string in = "STDIN_FILENO";
@@ -31,51 +29,26 @@ int main() {
         for (auto it = tokens.begin(); it != tokens.end(); it++) {
             if ((it + 1) != tokens.end()) {
                 if (*it == "e>") {
-                 // if (!proc.empty()) {
-                 //     procs.push_back(proc);
-                 //     proc.clear();
-                 // }
                     err = *(it + 1);
                     err += " (truncate)";
                     it++;
                 } else if (*it == "e>>") {
-                 // if (!proc.empty()) {
-                 //     procs.push_back(proc);
-                 //     proc.clear();
-                 // }
                     err = *(it + 1);
                     err += " (append)";
                     it++;
                 } else if (*it == ">") {
-                 // if (!proc.empty()) {
-                 //     procs.push_back(proc);
-                 //     proc.clear();
-                 // }
                     out = *(it + 1);
                     out += " (truncate)";
                     it++;
                 } else if (*it == ">>") {
-                 // if (!proc.empty()) {
-                 //     procs.push_back(proc);
-                 //     proc.clear();
-                 // }
                     out = *(it + 1);
                     out += " (append)";
                     it++;
                 } else if (*it == "<") {
-                 // if (!proc.empty()) {
-                 //     procs.push_back(proc);
-                 //     proc.clear();
-                 // }
                     in = *(it + 1);
                     it++;
                 } else if (*it == "|") {
-                 // if (!proc.empty()) {
-                 //     procs.push_back(proc);
-                 //     proc.clear();
-                 // }
                     pipe_count++;
-                    //it++;
                 } else {
                     proc.push_back(*it);
                 }
@@ -84,32 +57,8 @@ int main() {
                 procs.push_back(proc);
             }
         }
-
-        printf("\n");
         
-        printf("Job STDIN  = %s\n", in.c_str());
-        printf("Job STDOUT = %s\n", out.c_str());
-        printf("Job STDERR = %s\n", err.c_str());
-
-        printf("\n");
-
-        printf("%d pipe(s)\n", pipe_count);
-        printf("%lu process(es)\n", procs.size());
-
-        printf("\n");
-
-        for (unsigned long i = 0; i < procs.size(); i++) {
-            printf("Process %lu argv:\n", i);
-            for (unsigned long j = 0; j < procs[i].size(); j++) {
-                printf("%lu: %s\n", j, procs[i][j].c_str());
-            }
-            if (i + 1 != procs.size())
-                printf("\n");
-        }
-
-        printf("\n");
-
-        printf("repl$ ");
+        printprompt();
     }
     printf("\n");
     return EXIT_SUCCESS;
