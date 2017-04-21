@@ -108,8 +108,6 @@ int main() {
         }
 
         printf("\n");
-
-        printf("repl$ ");
     }
     printf("\n");
     return EXIT_SUCCESS;
