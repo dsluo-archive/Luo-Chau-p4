@@ -15,7 +15,7 @@ all: $(TARGET)
 $(TARGET): $(OBJECTS)
 	$(GCC) $(LFLAGS) -o $@ $^
 
-$(OBJDIR)/%.o: $(SRCDIR)/%.cpp dir
+$(OBJDIR)/%.o: $(SRCDIR)/%.cpp | dir
 	$(GCC) $(CFLAGS) -c -o $@ $<
 
 dir:
