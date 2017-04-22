@@ -69,20 +69,21 @@ int main() {
         int pid = fork();
         int status;
         if (pid == 0){
-            char **args = new char*[procs[0].size()];
-            int i = 0;
-            for (auto it = procs[0].begin(); it != procs[0].end(); it++){
-                args[i] = (char *) (*it).c_str(); 
-                i++;
+            // Convert string vector into cstring array
+            {
+                char **args = new char*[procs[0].size()];
+                for (int i = 0; i < procs[0].size(); i++) {
+                    args[i] = (char *) procs[0][i].c_str();
+                }
+                args[procs[0].size()] = nullptr;
+
+                // populate arguments with char **
+                if (execvp(procs[0][0].c_str(), args) == -1){
+                    perror(procs[0][0].c_str()); 
+                }
+
+                delete[] args;
             }
-            args[i] = nullptr;
-            
-            // populate arguments with char **
-            if (execvp(procs[0][0].c_str(), args) == -1){
-                perror(procs[0][0].c_str()); 
-            }
-            
-            delete[] args;
         } else {
             while (wait(&status) != pid){
                 // wait for child to complete 
@@ -110,9 +111,9 @@ void printprompt(){
     printf("1730sh: ");
     if (strlen(p) >= strlen(homedir)){
         char *rpath = p + strlen(homedir);
-        printf("~%s> ", rpath);   
+        printf("~%s$ ", rpath);   
     } else {
-        printf("%s> ", p); 
+        printf("%s$ ", p); 
     }
 }
 
