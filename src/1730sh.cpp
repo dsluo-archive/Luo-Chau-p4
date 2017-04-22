@@ -1,11 +1,13 @@
 #include <string>
 #include <cstdio>
+#include <cstdlib>
 #include <iostream>
 #include <vector>
 #include <iterator>
 #include <unistd.h>
 #include <string.h>
 #include <sys/wait.h>
+#include "BuiltIns.h"
 
 using namespace std;
 
@@ -53,6 +55,10 @@ int main() {
                     in = *(it + 1);
                     it++;
                 } else if (*it == "|") {
+                    if (!proc.empty()) {
+                        procs.push_back(proc);
+                        proc.clear();
+                    }
                     pipe_count++;
                 } else {
                     proc.push_back(*it);
@@ -63,32 +69,39 @@ int main() {
             }
         }
        
-        printprompt();
-        
 
-        int pid = fork();
-        int status;
-        if (pid == 0){
-            // Convert string vector into cstring array
-            {
-                char **args = new char*[procs[0].size()];
-                for (int i = 0; i < procs[0].size(); i++) {
-                    args[i] = (char *) procs[0][i].c_str();
+
+        // for each process in procs,
+        for (size_t i = 0; i < procs.size(); i++) {
+            int pid = fork();
+            int status;
+            if (pid == 0){
+                // Construct argv
+                char **argv = new char*[procs[i].size()];
+                for (size_t j = 0; j < procs[i].size(); j++) {
+                    argv[j] = (char *) procs[i][j].c_str();
                 }
-                args[procs[0].size()] = nullptr;
+                // argv must be null-terminated
+                argv[procs[i].size()] = nullptr;
 
-                // populate arguments with char **
-                if (execvp(procs[0][0].c_str(), args) == -1){
-                    perror(procs[0][0].c_str()); 
+                if (strcmp(argv[0], "cd") == 0) {
+                    cd(argv[1]);
+                } else {
+                    // populate arguments with char **
+                    if (execvp(procs[i][0].c_str(), argv) == -1){
+                        perror(procs[i][0].c_str()); 
+                    }
                 }
-
-                delete[] args;
-            }
-        } else {
-            while (wait(&status) != pid){
-                // wait for child to complete 
+                delete[] argv;
+                break; // stop loop only in child
+            } else {
+                while (wait(&status) != pid){
+                    // wait for child to complete 
+                }
             }
         }
+
+        printprompt();
     }
     printf("\n");
     return EXIT_SUCCESS;
