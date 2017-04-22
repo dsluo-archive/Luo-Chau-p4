@@ -93,7 +93,7 @@ int main() {
     return EXIT_SUCCESS;
 } 
 void printprompt(){
-    // figure out what the current working directory is. 
+    // Figure out what the current working directory is. 
     long maxlen = pathconf(".", _PC_PATH_MAX);
     char *buf = nullptr;
     char *p; 
@@ -120,12 +120,16 @@ vector<string> tokenize(string str) {
     vector<string> output;
     
     char prev = '\0';
-
+    
     for (auto it = str.begin(); it != str.end(); it++) {
+        // Skip over excessive spaces
         if (*it == ' ' && prev != '\0' && prev != ' ') {
             output.push_back({""});
-        } else if (*it == '"') {
+        } 
+        // Handle quotes
+        else if (*it == '"') {
             while (++it != str.end()) {
+                // Handle escapes
                 if (*it == '\\') {
                     if (*(it + 1) == '"') {
                         output.back().push_back('"');
@@ -139,9 +143,8 @@ vector<string> tokenize(string str) {
                 } else {
                     output.back().push_back(*it);
                 }
-                //it++;
             }
-                 
+        // Handle everything else
         } else if (*it != ' ') {
             if (output.empty())
                 output.push_back("");
