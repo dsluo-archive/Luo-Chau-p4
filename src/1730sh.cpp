@@ -68,35 +68,45 @@ int main() {
                 procs.push_back(proc);
             }
         }
-       
-
 
         // for each process in procs,
         for (size_t i = 0; i < procs.size(); i++) {
-            int pid = fork();
-            int status;
-            if (pid == 0){
-                // Construct argv
-                char **argv = new char*[procs[i].size()];
-                for (size_t j = 0; j < procs[i].size(); j++) {
-                    argv[j] = (char *) procs[i][j].c_str();
-                }
-                // argv must be null-terminated
-                argv[procs[i].size()] = nullptr;
+            // Construct argv
+            char **argv = new char*[procs[i].size()];
+            for (size_t j = 0; j < procs[i].size(); j++) {
+                argv[j] = (char *) procs[i][j].c_str();
+            }
+            // argv must be null-terminated
+            argv[procs[i].size()] = nullptr;
 
-                if (strcmp(argv[0], "cd") == 0) {
-                    cd(argv[1]);
+            if (strcmp(argv[0], "cd") == 0) {
+                cd(argv[1]);
+            } else if (strcmp(argv[0], "exit") == 0) {
+                if (argv[1] != nullptr) {
+                    exit(atoi(argv[1])); 
                 } else {
-                    // populate arguments with char **
+                    // TODO: change this so that it exits with status code of last command
+                    exit(EXIT_SUCCESS);
+                }
+            } else if (strcmp(argv[0], "help") == 0) {
+            } else if (strcmp(argv[0], "fg") == 0) {
+            } else if (strcmp(argv[0], "bg") == 0) {
+            } else if (strcmp(argv[0], "jobs") == 0) {
+            } else if (strcmp(argv[0], "kill") == 0) {
+            } else {
+                int pid = fork();
+                int status;
+                if (pid == 0){
+                    // populate arguments with argv
                     if (execvp(procs[i][0].c_str(), argv) == -1){
                         perror(procs[i][0].c_str()); 
                     }
-                }
-                delete[] argv;
-                break; // stop loop only in child
-            } else {
-                while (wait(&status) != pid){
-                    // wait for child to complete 
+                    delete[] argv;
+                    break; // stop loop only in child
+                } else {
+                    while (wait(&status) != pid){
+                        // wait for child to complete 
+                    }
                 }
             }
         }
