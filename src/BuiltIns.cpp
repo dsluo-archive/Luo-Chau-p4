@@ -5,7 +5,7 @@
 int cd(const char * path) {
     int status = chdir(path);
     if (status == -1) {
-        perror("cd: ");
+        perror("cd");
     }
 
     return status;
