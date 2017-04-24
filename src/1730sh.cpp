@@ -89,6 +89,17 @@ int main() {
                     exit(EXIT_SUCCESS);
                 }
             } else if (strcmp(argv[0], "help") == 0) {
+                const char * help =
+                    "bg JID               – Resume the stopped job JID in the background, as if it had been started with &.\n"
+                    "cd [PATH]            – Change the current directory to PATH. The environmental variable HOME is the default PATH.\n"
+                    "exit [N]             – Cause the shell to exit with a status of N. If N is omitted, the exit status is that of the last job executed.\n"
+                    "export NAME[=WORD]   – NAME is automatically included in the environment of subsequently executed jobs.\n"
+                    "fg JID               – Resume job JID in the foreground, and make it the current job.\n"
+                    "help                 – Display this help message.\n"
+                    "jobs                 – List current jobs.\n"
+                    "kill [-s SIGNAL] PID – The kill utility sends the specified signal to the specified process or process group PID\n"
+                    "                       If no signal is specified, the SIGTERM signal is sent.\n";
+                printf(help);
             } else if (strcmp(argv[0], "fg") == 0) {
             } else if (strcmp(argv[0], "bg") == 0) {
             } else if (strcmp(argv[0], "jobs") == 0) {
