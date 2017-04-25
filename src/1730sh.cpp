@@ -1,3 +1,4 @@
+#include <array>
 #include <string>
 #include <cstdio>
 #include <cstdlib>
@@ -14,10 +15,10 @@ using namespace std;
 
 vector<string> tokenize(string str);
 void printprompt();
+void close_pipe(int pipefd[2]);
 
 int main() {
     string line;
-    int *pipefds;
 
     signal(SIGINT, SIG_IGN);
    
@@ -77,23 +78,12 @@ int main() {
             }
         }
 
-        // Create all pipes needed
-        // Should look like:
-        // cmd0   cmd1   cmd2   cmd3
-        //    pipe1  pipe2  pipe3
-        //    [0,1]  [1,2]  [2,3]
-        if (procs.size() > 1){ 
-            pipefds = new int[(procs.size() - 1) * 2]; 
-            for (unsigned int i = 0; i < ((procs.size() - 1) * 2); i++){
-                if (pipe(pipefds + i * 2) < 0){
-                    perror("pipe");
-                }
-            }
-        }
+        pid_t pid;
+        int status;
+        vector<array<int, 2>> pipefds;
 
         // for each process in procs,
-        int status;
-        for (size_t i = 0, j = 0; i < procs.size(); i++, j += 2) {
+        for (size_t i = 0; i < procs.size(); i++) {
             // Construct argv
             char **argv = new char*[procs[i].size()];
             for (size_t k = 0; k < procs[i].size(); k++) {
@@ -101,6 +91,16 @@ int main() {
             }
             // argv must be null-terminated
             argv[procs[i].size()] = nullptr;
+
+            // create pipe for command
+            if (i != procs.size() - 1){
+                int pipefd[2];
+                if (pipe(pipefd) == -1){
+                    perror("pipe");
+                    exit(EXIT_FAILURE); 
+                }
+                pipefds.push_back({pipefd[0], pipefd[1]});
+            } 
 
             if (strcmp(argv[0], "cd") == 0) {
                 cd(argv[1]);
@@ -129,7 +129,7 @@ int main() {
             } else if (strcmp(argv[0], "jobs") == 0) {  // TODO: Write jobs cmd
             } else if (strcmp(argv[0], "kill") == 0) {  // TODO: Write kill cmd
             } else {
-                pid_t pid = fork();
+                pid = fork();
                 
                 if (pid == 0){
                     // TODO: Handle error redirection 
@@ -137,55 +137,53 @@ int main() {
                     // TODO: Handling stdout redirection
 
                     // if not the first command 
-                    if (j != 0){
-                        if (dup2(pipefds[j - 2], STDIN_FILENO) < 0){
-                             perror("dup2");
-                             // TODO: stop processing
+                    if (i != 0){
+                        if (dup2(pipefds.at(i - 1)[0], STDIN_FILENO) == -1){
+                            perror("dup2");
+                            exit(EXIT_FAILURE); 
                         }
                     }
                     
-                    // if not the last command
-                    if (i + 1 < procs.size()){
-                        if (dup2(pipefds[j + 1], STDOUT_FILENO) < 0){
-                            perror("dup2"); 
-                            // TODO: stop processing 
+                    // if not the last command 
+                    if (i != procs.size() -1){
+                        if (dup2(pipefds.at(i)[1], STDOUT_FILENO) == -1){
+                            perror("dup2");
+                            exit(EXIT_FAILURE); 
                         }
                     }
-                    
-                    // close all pipefds in child 
-                    for (unsigned int i = 0; i < ((procs.size() - 1) * 2); i++){
-                        close(pipefds[i]); 
+
+                    for (unsigned int i = 0; i < pipefds.size(); i++){
+                        close_pipe(pipefds.at(i).data()); 
                     }
 
                     // populate arguments with argv
                     if (execvp(procs[i][0].c_str(), argv) == -1){
                         perror(procs[i][0].c_str()); 
+                        delete[] argv;
+                        
+                        exit(EXIT_FAILURE);
                     }
-                    delete[] argv;
-                    
-                    break; // stop loop only in child
                 } else if (pid < 0){
                     perror("fork"); 
+                    exit(EXIT_FAILURE);
                 } 
             }
         }
         
-        // close all pipes when done 
-        for (unsigned int i = 0; i < ((procs.size() - 1) * 2); i++){
-            close(pipefds[i]); 
+        /* // close all pipes when done */ 
+        for (unsigned int i = 0; i < pipefds.size(); i++){
+            close_pipe(pipefds.at(i).data()); 
         }
-
-        for (unsigned int i = 0; i < procs.size(); i++){
-            wait(&status); 
-        }
+        
+        waitpid(pid, nullptr, 0);
 
         printprompt();
     }
-    delete[] pipefds;
-   
+    
     printf("\n");
     return EXIT_SUCCESS;
-} 
+}
+ 
 void printprompt(){
     // Figure out what the current working directory is. 
     long maxlen = pathconf(".", _PC_PATH_MAX);
@@ -248,5 +246,17 @@ vector<string> tokenize(string str) {
     }
 
     return output;
+}
+
+void close_pipe(int pipefd[2]){
+    if (close(pipefd[0]) == -1){
+        perror("close");
+        exit(EXIT_FAILURE); 
+    }
+
+    if (close(pipefd[1]) == -1){
+        perror("close");
+        exit(EXIT_FAILURE); 
+    }
 }
 
