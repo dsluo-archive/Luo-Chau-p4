@@ -23,37 +23,44 @@ int main() {
    
     printprompt();
     while (getline(cin, line)) {
-        int pipe_count = 0;
 
         bool append = false;
+        bool eappend = false;
 
         string in = "STDIN_FILENO";
         string out = "STDOUT_FILENO";
         string err = "STDERR_FILENO";
 
-        vector<string> tokens = tokenize(line);
-        vector<vector<string>> procs; // TODO: Crashes right here after doing piped commands
-        vector<string> proc;
+        int infd = STDIN_FILENO;
+        int outfd = STDOUT_FILENO;
+        int errfd = STDERR_FILENO;
 
+        vector<string> tokens = tokenize(line);
+        vector<vector<string>> procs; // TODO: Crashes right here after doing more than two piped commands
+        vector<string> proc;
+        
         for (auto it = tokens.begin(); it != tokens.end(); it++) {
             if ((it + 1) != tokens.end()) {
-                if (*it == "e>") {
+                if (*it == "e>") { // TODO: Handling error redirection
                     err = *(it + 1);
-                    append = false; 
+                     
+                    //if ((infd = open(err.c_string
+
+                    eappend = false; 
                     it++;
-                } else if (*it == "e>>") {
+                } else if (*it == "e>>") { // TODO: Handling error redirection
                     err = *(it + 1);
-                    append = true; 
+                    eappend = true; 
                     it++;
-                } else if (*it == ">") {
+                } else if (*it == ">") { // TODO: Handling output redirection
                     out = *(it + 1);
                     append = false; 
                     it++;
-                } else if (*it == ">>") {
+                } else if (*it == ">>") { // TODO: Handling output redirection
                     out = *(it + 1);
                     append = true; 
                     it++;
-                } else if (*it == "<") {
+                } else if (*it == "<") { // TODO: Handling output redirection
                     in = *(it + 1);
                     it++;
                 } else if (*it == "|") {
@@ -61,7 +68,6 @@ int main() {
                         procs.push_back(proc);
                         proc.clear();
                     }
-                    pipe_count++;
                 } else {
                     proc.push_back(*it);
                 }
@@ -126,6 +132,10 @@ int main() {
                 pid_t pid = fork();
                 
                 if (pid == 0){
+                    // TODO: Handle error redirection 
+                    // TODO: Handling stdin redirection 
+                    // TODO: Handling stdout redirection
+
                     // if not the first command 
                     if (j != 0){
                         if (dup2(pipefds[j - 2], STDIN_FILENO) < 0){
@@ -137,7 +147,7 @@ int main() {
                     // if not the last command
                     if (i + 1 < procs.size()){
                         if (dup2(pipefds[j + 1], STDOUT_FILENO) < 0){
-                            perror("dup2");
+                            perror("dup2"); 
                             // TODO: stop processing 
                         }
                     }
