@@ -24,10 +24,6 @@ int main() {
    
     printprompt();
     while (getline(cin, line)) {
-
-        bool append = false;
-        bool eappend = false;
-
         string in = "STDIN_FILENO";
         string out = "STDOUT_FILENO";
         string err = "STDERR_FILENO";
@@ -37,7 +33,7 @@ int main() {
         int errfd = STDERR_FILENO;
 
         vector<string> tokens = tokenize(line);
-        vector<vector<string>> procs; // TODO: Crashes right here after doing more than two piped commands
+        vector<vector<string>> procs;
         vector<string> proc;
         
         for (auto it = tokens.begin(); it != tokens.end(); it++) {
@@ -45,24 +41,47 @@ int main() {
                 if (*it == "e>") { // TODO: Handling error redirection
                     err = *(it + 1);
                      
-                    //if ((infd = open(err.c_string
-
-                    eappend = false; 
+                    /* if ((errfd = open(err.c_str(), O_WRONLY)) == -1){ */
+                    /*     perror("open"); */
+                    /*     exit(EXIT_FAILURE); */ 
+                    /* } */ 
+                    
                     it++;
                 } else if (*it == "e>>") { // TODO: Handling error redirection
                     err = *(it + 1);
-                    eappend = true; 
+
+                    /* if ((errfd = open(err.c_str(), O_WRONLY | O_APPEND)) == -1){ */
+                    /*     perror("open"); */
+                    /*     exit(EXIT_FAILURE); */ 
+                    /* } */ 
+
                     it++;
                 } else if (*it == ">") { // TODO: Handling output redirection
                     out = *(it + 1);
-                    append = false; 
+                    
+                    /* if ((outfd = open(out.c_str(), O_WRONLY)) == -1){ */
+                    /*     perror("open"); */
+                    /*     exit(EXIT_FAILURE); */ 
+                    /* } */ 
+                    
                     it++;
                 } else if (*it == ">>") { // TODO: Handling output redirection
                     out = *(it + 1);
-                    append = true; 
+                   
+                    /* if ((outfd = open(out.c_str(), O_WRONLY | O_APPEND)) == -1){ */
+                    /*     perror("open"); */
+                    /*     exit(EXIT_FAILURE); */ 
+                    /* } */ 
+                   
                     it++;
-                } else if (*it == "<") { // TODO: Handling output redirection
+                } else if (*it == "<") { // TODO: Handling input redirection
                     in = *(it + 1);
+                  
+                    /* if ((infd = open(in.c_str(), O_WRONLY)) == -1){ */
+                    /*     perror("open"); */
+                    /*     exit(EXIT_FAILURE); */ 
+                    /* } */ 
+                   
                     it++;
                 } else if (*it == "|") {
                     if (!proc.empty()) {
@@ -79,7 +98,6 @@ int main() {
         }
 
         pid_t pid;
-        int status;
         vector<array<int, 2>> pipefds;
 
         // for each process in procs,
@@ -129,13 +147,20 @@ int main() {
             } else if (strcmp(argv[0], "jobs") == 0) {  // TODO: Write jobs cmd
             } else if (strcmp(argv[0], "kill") == 0) {  // TODO: Write kill cmd
             } else {
+                // if the first command 
+                if (i == 0){
+                    // TODO: Handling stdin redirection 
+                }
+                
+                // if the last command
+                if (i == procs.size() - 1){
+                    // TODO: Handle error redirection 
+                    // TODO: Handling stdout redirection
+                }
+                
                 pid = fork();
                 
                 if (pid == 0){
-                    // TODO: Handle error redirection 
-                    // TODO: Handling stdin redirection 
-                    // TODO: Handling stdout redirection
-
                     // if not the first command 
                     if (i != 0){
                         if (dup2(pipefds.at(i - 1)[0], STDIN_FILENO) == -1){
