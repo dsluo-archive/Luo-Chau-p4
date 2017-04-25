@@ -29,7 +29,7 @@ int main() {
         "kill [-s SIGNAL] PID – The kill utility sends the specified signal to the specified process or process group PID\n"
         "                       If no signal is specified, the SIGTERM signal is sent.\n";
     string line;
-    int * last_wstatus;
+    int * last_wstatus = nullptr;
     
     signal(SIGINT, SIG_IGN);
    
@@ -136,12 +136,11 @@ int main() {
                 if (argv[1] != nullptr) {
                     exit(atoi(argv[1])); 
                 } else {
-                    // TODO: is EXIT_FAILURE the proper exit status if
-                    // it did not exit normally?
-                    int exit_status = WIFEXITED(last_wstatus) 
-                        ? WEXITSTATUS(last_wstatus)
-                        : EXIT_FAILURE;
-
+                    int exit_status = EXIT_SUCCESS; 
+                    if (last_wstatus){
+                        exit_status = WIFEXITED(*last_wstatus) ? WEXITSTATUS(*last_wstatus) : EXIT_SUCCESS;    
+                    }
+                    
                     exit(exit_status);
                 }
             } else if (strcmp(argv[0], "help") == 0) {
