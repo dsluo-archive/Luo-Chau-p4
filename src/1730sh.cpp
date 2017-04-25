@@ -18,8 +18,19 @@ void printprompt();
 void close_pipe(int pipefd[2]);
 
 int main() {
+    const char *HELP_MESSAGE =
+        "bg JID               – Resume the stopped job JID in the background, as if it had been started with &.\n"
+        "cd [PATH]            – Change the current directory to PATH. The environmental variable HOME is the default PATH.\n"
+        "exit [N]             – Cause the shell to exit with a status of N. If N is omitted, the exit status is that of the last job executed.\n"
+        "export NAME[=WORD]   – NAME is automatically included in the environment of subsequently executed jobs.\n" 
+        "fg JID               – Resume job JID in the foreground, and make it the current job.\n"
+        "help                 – Display this help message.\n"
+        "jobs                 – List current jobs.\n"
+        "kill [-s SIGNAL] PID – The kill utility sends the specified signal to the specified process or process group PID\n"
+        "                       If no signal is specified, the SIGTERM signal is sent.\n";
     string line;
-
+    int * last_wstatus;
+    
     signal(SIGINT, SIG_IGN);
    
     printprompt();
@@ -99,7 +110,6 @@ int main() {
 
         pid_t pid;
         vector<array<int, 2>> pipefds;
-
         // for each process in procs,
         for (size_t i = 0; i < procs.size(); i++) {
             // Construct argv
@@ -126,22 +136,16 @@ int main() {
                 if (argv[1] != nullptr) {
                     exit(atoi(argv[1])); 
                 } else {
-                    // TODO: change this so that it exits with status code of last command
-                    exit(EXIT_SUCCESS);
+                    // TODO: is EXIT_FAILURE the proper exit status if
+                    // it did not exit normally?
+                    int exit_status = WIFEXITED(last_wstatus) 
+                        ? WEXITSTATUS(last_wstatus)
+                        : EXIT_FAILURE;
+
+                    exit(exit_status);
                 }
             } else if (strcmp(argv[0], "help") == 0) {
-                // TODO: Move this somewhere else, don't need to shove this into a variable everytime 
-                const char *help =
-                    "bg JID               – Resume the stopped job JID in the background, as if it had been started with &.\n"
-                    "cd [PATH]            – Change the current directory to PATH. The environmental variable HOME is the default PATH.\n"
-                    "exit [N]             – Cause the shell to exit with a status of N. If N is omitted, the exit status is that of the last job executed.\n"
-                    "export NAME[=WORD]   – NAME is automatically included in the environment of subsequently executed jobs.\n" "fg JID               – Resume job JID in the foreground, and make it the current job.\n"
-                    "help                 – Display this help message.\n"
-                    "jobs                 – List current jobs.\n"
-                    "kill [-s SIGNAL] PID – The kill utility sends the specified signal to the specified process or process group PID\n"
-                    "                       If no signal is specified, the SIGTERM signal is sent.\n";
-
-                printf(help);
+                printf(HELP_MESSAGE);
             } else if (strcmp(argv[0], "fg") == 0) {    // TODO: Write foreground cmd
             } else if (strcmp(argv[0], "bg") == 0) {    // TODO: Write background cmd
             } else if (strcmp(argv[0], "jobs") == 0) {  // TODO: Write jobs cmd
@@ -195,12 +199,12 @@ int main() {
             }
         }
         
-        /* // close all pipes when done */ 
+        // close all pipes when done
         for (unsigned int i = 0; i < pipefds.size(); i++){
             close_pipe(pipefds.at(i).data()); 
         }
         
-        waitpid(pid, nullptr, 0);
+        waitpid(pid, last_wstatus, 0);
 
         printprompt();
     }
