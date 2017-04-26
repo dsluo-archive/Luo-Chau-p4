@@ -10,3 +10,12 @@ int cd(const char * path) {
 
     return status;
 }
+
+void addtojobtable(pid_t jid){
+     
+}
+
+void jobs(){
+
+}
+
