@@ -146,45 +146,28 @@ int main() {
             } else {
                 if (i == 0){
                     if (in != "") {
-                        // TODO: Handling stdin redirection 
                         if ((infd = open(in.c_str(), O_RDONLY)) == -1){
                             perror("open");
                             exit(EXIT_FAILURE);
                         }
-
-                        if (dup2(infd, STDIN_FILENO) == -1) {
-                            perror("dup2");
-                            exit(EXIT_FAILURE); }
                     }
                 }
 
 
                 if (i == procs.size() - 1){
                     if (out != "") {
-                        // TODO: Handling stdout redirection
                         int mode = O_WRONLY | O_CREAT | (out_append ? O_APPEND : O_TRUNC);
                         if ((outfd = open(out.c_str(), mode, 0644)) == -1){
                             perror("open");
                             exit(EXIT_FAILURE);
                         }
-
-                        // if (dup2(outfd, STDOUT_FILENO) == -1) {
-                        //     perror("dup2");
-                        //     exit(EXIT_FAILURE);
-                        // }
                     }
                     if (err != "") {
-                        // TODO: Handle error redirection
                         int mode = O_WRONLY | O_CREAT | (err_append ? O_APPEND : O_TRUNC);
                         if ((errfd = open(err.c_str(), mode)) == -1){
                             perror("open");
                             exit(EXIT_FAILURE);
                         }
-
-                        // if (dup2(errfd, STDERR_FILENO) == -1) {
-                        //     perror("dup2");
-                        //     exit(EXIT_FAILURE);
-                        // }
                     }
                 }
 
@@ -198,11 +181,12 @@ int main() {
                             exit(EXIT_FAILURE); 
                         }
                     } else {
-                        if (dup2(errfd, STDERR_FILENO) == -1) {
+                        if (dup2(infd, STDIN_FILENO) == -1) {
                             perror("dup2");
                             exit(EXIT_FAILURE);
                         }
                     }
+
                     // if not the last command
                     if (i != procs.size() - 1){ 
                         if (dup2(pipefds.at(i)[1], STDOUT_FILENO) == -1){
@@ -211,6 +195,11 @@ int main() {
                         }
                     } else {
                         if (dup2(outfd, STDOUT_FILENO) == -1){
+                            perror("dup2");
+                            exit(EXIT_FAILURE);
+                        }
+                        
+                        if (dup2(errfd, STDERR_FILENO) == -1) {
                             perror("dup2");
                             exit(EXIT_FAILURE);
                         }
