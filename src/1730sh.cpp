@@ -291,7 +291,8 @@ vector<string> tokenize(string str) {
     for (auto it = str.begin(); it != str.end(); it++) {
         // Skip over excessive spaces
         if (*it == ' ' && prev != '\0' && prev != ' ') {
-            output.push_back({""});
+            if (it + 1 != str.end())
+                output.push_back({""});
         } 
         // Handle quotes
         else if (*it == '"') {
