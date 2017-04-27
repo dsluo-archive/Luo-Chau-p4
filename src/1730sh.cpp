@@ -15,9 +15,19 @@
 
 using namespace std;
 
+typedef struct job_entry {
+    pid_t pid;
+    string status;
+    string cmd; 
+} job_entry;
+
+vector<job_entry> jobtable;
+
 vector<string> tokenize(string str);
 void printprompt();
 void close_pipe(int pipefd[2]);
+void addtotable(pid_t pid, char** cmd, size_t cmd_size);
+void handle_bg(int signum);
 
 int main() {
     const char *HELP_MESSAGE =
@@ -34,6 +44,7 @@ int main() {
     int * last_wstatus = nullptr;
 
     signal(SIGINT, SIG_IGN);
+    signal(SIGCHLD, handle_bg);
 
     int dfl_in = dup(STDIN_FILENO);
     if (dfl_in == -1) { perror("dup"); exit(EXIT_FAILURE); }
@@ -54,6 +65,8 @@ int main() {
 
         bool out_append = false;
         bool err_append = false;
+
+        bool bg = false;
 
         vector<string> tokens = tokenize(line);
         vector<vector<string>> procs; // TODO: Fix spacing splitting thing
@@ -88,15 +101,21 @@ int main() {
                 } else {
                     proc.push_back(*it);
                 }
-                if (it == tokens.end() - 1)
+               
+                if (it == tokens.end() - 1) {
                     procs.push_back(proc);
+                }
             } else {
-                proc.push_back(*it);
+                if (*it == "&" && it == tokens.end() - 1)
+                    bg = true;
+                else
+                    proc.push_back(*it);
                 procs.push_back(proc);
             }
         }
 
         pid_t pid;
+        pid_t bg_pid = 0;
         vector<array<int, 2>> pipefds;
 
         // for each process in procs,
@@ -113,7 +132,8 @@ int main() {
 
             // Construct argv
             char **argv = new char*[procs[i].size()];
-            for (size_t k = 0; k < procs[i].size(); k++) {
+            size_t k;
+            for (k = 0; k < procs[i].size(); k++) {
                 argv[k] = (char *) procs[i][k].c_str();
             }
             // argv must be null-terminated
@@ -125,8 +145,6 @@ int main() {
                 if (argv[1] != nullptr) {
                     exit(atoi(argv[1])); 
                 } else {
-                    // TODO: is EXIT_FAILURE the proper exit status if
-                    // it did not exit normally?
                     int exit_status;
                     if (last_wstatus != nullptr)
                         exit_status = WIFEXITED(*last_wstatus) 
@@ -140,10 +158,31 @@ int main() {
             } else if (strcmp(argv[0], "help") == 0) {
                 printf(HELP_MESSAGE);
             } else if (strcmp(argv[0], "fg") == 0) {    // TODO: Write foreground cmd
-            } else if (strcmp(argv[0], "bg") == 0) {    // TODO: Write background cmd
+                // get the  
+
+            //} else if (strcmp(argv[0], "bg") == 0 || bg) {    // TODO: Write background cmd
+                //do the usual stuff if it weren't a built in command.
+                // if it's the first command, then set the group id to the new process id.
+                // for every other command, set the group id to the group id of the first command.
+
+                // if the child (e.g bg_pid == 0)
+                    // get the background process id
+                    // add the job to the table
+                    // do the exec and stuff
+                // if bg_pid < 0
+                    // perror
+                
+            //} 
             } else if (strcmp(argv[0], "jobs") == 0) {  // TODO: Write jobs cmd
+                printf("\n"); 
+                for (auto val : jobtable){
+                    printf("[%d] %s %s\n", val.pid, val.cmd.c_str(), val.status.c_str()); 
+                }
             } else if (strcmp(argv[0], "kill") == 0) {  // TODO: Write kill cmd
             } else {
+                // TODO: Put into function, replace to make this look nicer. 
+                // TODO: If argv[0] is "bg", then need to remove it from vector.
+             
                 if (i == 0){
                     if (in != "") {
                         if ((infd = open(in.c_str(), O_RDONLY)) == -1){
@@ -171,21 +210,32 @@ int main() {
                     }
                 }
 
-                pid = fork();
-
+                pid = fork(); 
                 if (pid == 0){
                     // if not the first command 
                     if (i != 0){ 
+                        if (bg){
+                            setpgid(0, bg_pid);  
+                        }
+                         
                         if (dup2(pipefds.at(i - 1)[0], STDIN_FILENO) == -1){
                             perror("dup2");
                             exit(EXIT_FAILURE); 
                         }
                     } else {
+                        if (bg){
+                            setpgid(0, 0); 
+                            bg_pid = getpid();
+                        }
+                   
                         if (dup2(infd, STDIN_FILENO) == -1) {
                             perror("dup2");
                             exit(EXIT_FAILURE);
                         }
                     }
+
+                    if (bg) 
+                        addtotable(getpid(), argv, k); 
 
                     // if not the last command
                     if (i != procs.size() - 1){ 
@@ -234,8 +284,12 @@ int main() {
         for (unsigned int i = 0; i < pipefds.size(); i++){
             close_pipe(pipefds.at(i).data()); 
         }
-
-        waitpid(pid, last_wstatus, 0);
+        
+        if (!bg){ 
+            for (unsigned int i = 0; i < procs.size(); i++){
+                wait(last_wstatus); 
+            }
+        }
 
         // Restore file descriptors 
         if (dup2(STDIN_FILENO, dfl_in) == -1)
@@ -335,3 +389,35 @@ void close_pipe(int pipefd[2]){
     }
 }
 
+void handle_bg(int signum){
+    pid_t chld_pid;
+    int status;
+
+    while ((chld_pid = waitpid(-1, &status, WNOHANG) > 0)){
+        // print status info out of handler. save this data in a global structure of sorts 
+        if (WIFEXITED(status)){
+            // update pid status
+        } else if (WIFSTOPPED(status)){
+            // update pid status
+        } else if (WIFSIGNALED(status)){
+            // update pid status
+        } else {
+            perror("waitpid");
+        }
+    }
+}
+
+void addtotable(pid_t pid, char** cmd, size_t cmd_size){
+    string r_cmd = "";
+    for (size_t i = 0; i < cmd_size; i++){
+        r_cmd.append(cmd[i]);    
+    }
+
+    job_entry job; 
+    
+    job.pid = pid;
+    job.cmd = r_cmd;
+    job.status = "Running";
+
+    jobtable.push_back(job);     
+}
