@@ -28,6 +28,9 @@ void printprompt();
 void close_pipe(int pipefd[2]);
 void addtotable(pid_t pid, char** cmd, size_t cmd_size);
 
+void handle_stop(int signum); // ctrl-z
+void handle_kill(int signum); // ctrl-c
+
 void handle_bg(int signum);
 void update_status(pid_t pid, string status);
 
@@ -44,8 +47,9 @@ int main() {
         "                       If no signal is specified, the SIGTERM signal is sent.\n";
     string line;
     int * last_wstatus = nullptr;
-
+    
     signal(SIGINT, SIG_IGN);
+    signal(SIGTSTP, SIG_IGN);
     signal(SIGCHLD, handle_bg);
 
     int dfl_in = dup(STDIN_FILENO);
@@ -217,6 +221,16 @@ int main() {
                     addtotable(pid, argv, k); 
                 
                 if (pid == 0){
+                    /* signal(SIGINT, SIG_DFL); */
+                    /* signal(SIGTSTP, SIG_DFL); */
+
+                    signal(SIGINT, handle_kill); // kill process, burn it with fire
+                    signal(SIGTSTP, handle_stop); // suspend process, stop it from running
+                                                  // note fg should handle suspended processes the same way as background ones.
+                                                  // e.g if I suspend a process, I can continue it by using fg.
+                                                  //     if I background a process, I can foreground it by using fg.
+                                                  // both should do the same thing, but handling will be a little different.
+                    
                     // if not the first command 
                     if (i != 0){ 
                         if (bg){
@@ -411,6 +425,22 @@ void handle_bg(int signum){
             perror("waitpid");
         }
     }
+}
+
+void handle_stop(int signum){
+    // Get the right pid
+    
+    // send the suspend signal (SIGSTOP) to the pid
+    // note that you don't need to handle changing the status of 
+    // the command here. That'll be handled in handle_bg.   
+}
+
+void handle_kill(int signum){
+    // Get the right pid
+
+    // send the kill signal (SIGKILL) to the pid
+    // note that you don't need to handle changing the status of 
+    // the command here. That'll be handled in handle_bg.   
 }
 
 void update_status(pid_t pid, string status){
