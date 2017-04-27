@@ -21,13 +21,15 @@ typedef struct job_entry {
     string cmd; 
 } job_entry;
 
-vector<job_entry> jobtable;
+static vector<job_entry> jobtable;
 
 vector<string> tokenize(string str);
 void printprompt();
 void close_pipe(int pipefd[2]);
 void addtotable(pid_t pid, char** cmd, size_t cmd_size);
+
 void handle_bg(int signum);
+void update_status(pid_t pid, string status);
 
 int main() {
     const char *HELP_MESSAGE =
@@ -211,6 +213,9 @@ int main() {
                 }
 
                 pid = fork(); 
+                if (bg) 
+                    addtotable(pid, argv, k); 
+                
                 if (pid == 0){
                     // if not the first command 
                     if (i != 0){ 
@@ -233,9 +238,6 @@ int main() {
                             exit(EXIT_FAILURE);
                         }
                     }
-
-                    if (bg) 
-                        addtotable(getpid(), argv, k); 
 
                     // if not the last command
                     if (i != procs.size() - 1){ 
@@ -290,7 +292,7 @@ int main() {
                 wait(last_wstatus); 
             }
         }
-
+        
         // Restore file descriptors 
         if (dup2(STDIN_FILENO, dfl_in) == -1)
             perror("dup2");
@@ -305,7 +307,7 @@ int main() {
             perror("close");
         if (errfd != STDERR_FILENO && close(errfd) != 0)
             perror("close");
-
+        
         printprompt();
     }
 
@@ -394,16 +396,32 @@ void handle_bg(int signum){
     pid_t chld_pid;
     int status;
 
-    while ((chld_pid = waitpid(-1, &status, WNOHANG) > 0)){
+    while ((chld_pid = waitpid(-1, &status, WNOHANG)) > 0){
         // print status info out of handler. save this data in a global structure of sorts 
         if (WIFEXITED(status)){
             // update pid status
+            update_status(chld_pid, "done"); 
         } else if (WIFSTOPPED(status)){
             // update pid status
+            update_status(chld_pid, "stopped"); 
         } else if (WIFSIGNALED(status)){
             // update pid status
+            update_status(chld_pid, "killed"); 
         } else {
             perror("waitpid");
+        }
+    }
+}
+
+void update_status(pid_t pid, string status){
+    for (auto entry = jobtable.begin(); entry != jobtable.end(); entry++) {
+        job_entry &job = *entry; 
+    
+        if (job.pid != pid){
+            continue; 
+        } else {
+            job.status = status; 
+            printf("[%d] %s\n", job.pid, job.status.c_str());
         }
     }
 }
@@ -418,7 +436,7 @@ void addtotable(pid_t pid, char** cmd, size_t cmd_size){
     
     job.pid = pid;
     job.cmd = r_cmd;
-    job.status = "Running";
+    job.status = "running";
 
     jobtable.push_back(job);     
 }
