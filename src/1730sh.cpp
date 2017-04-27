@@ -10,6 +10,8 @@
 #include <sys/wait.h>
 #include <sys/types.h>
 #include <fcntl.h>
+#include <signal.h>
+#include <map>
 
 #include "BuiltIns.h"
 
@@ -27,6 +29,8 @@ vector<string> tokenize(string str);
 void printprompt();
 void close_pipe(int pipefd[2]);
 void addtotable(pid_t pid, char** cmd, size_t cmd_size);
+
+int kill(int argc, char **argv);
 
 void handle_stop(pid_t pid, char** cmd, size_t cmd_size); // ctrl-z
 void handle_kill(int signum); // ctrl-c
@@ -75,28 +79,28 @@ int main() {
         bool bg = false;
 
         vector<string> tokens = tokenize(line);
-        vector<vector<string>> procs; // TODO: Fix spacing splitting thing
+        vector<vector<string>> procs;
         vector<string> proc;
 
         for (auto it = tokens.begin(); it != tokens.end(); it++) {
             if ((it + 1) != tokens.end()) {
-                if (*it == "e>") { // TODO: Handling error redirection
+                if (*it == "e>") {
                     err_append = false;
                     err = *(it + 1);
                     it++;
-                } else if (*it == "e>>") { // TODO: Handling error redirection
+                } else if (*it == "e>>") {
                     err_append = true;
                     err = *(it + 1);
                     it++;
-                } else if (*it == ">") { // TODO: Handling output redirection
+                } else if (*it == ">") {
                     out_append = false;
                     out = *(it + 1);
                     it++;
-                } else if (*it == ">>") { // TODO: Handling output redirection
+                } else if (*it == ">>") {
                     out_append = true;
                     out = *(it + 1);
                     it++;
-                } else if (*it == "<") { // TODO: Handling input redirection
+                } else if (*it == "<") {
                     in = *(it + 1);
                     it++;
                 } else if (*it == "|") {
@@ -174,6 +178,7 @@ int main() {
                     printf("[%d] %s %s\n", val.pid, val.cmd.c_str(), val.status.c_str()); 
                 }
             } else if (strcmp(argv[0], "kill") == 0) {  // TODO: Write kill cmd
+                int status = kill(size, argv);
             } else {
                 // TODO: Put into function, replace to make this look nicer. 
                 // TODO: If argv[0] is "bg", then need to remove it from vector.
@@ -319,6 +324,71 @@ int main() {
 
     printf("\n");
     return EXIT_SUCCESS;
+}
+
+int kill(int argc, char **argv) {
+    map<string, int> signal_map = {
+        {"SIGHUP",    SIGHUP},
+        {"SIGINT",    SIGINT},
+        {"SIGQUIT",   SIGQUIT},
+        {"SIGILL",    SIGILL},
+        {"SIGABRT",   SIGABRT},
+        {"SIGFPE",    SIGFPE},
+        {"SIGKILL",   SIGKILL},
+        {"SIGSEGV",   SIGSEGV},
+        {"SIGPIPE",   SIGPIPE},
+        {"SIGALRM",   SIGALRM},
+        {"SIGTERM",   SIGTERM},
+        {"SIGUSR1",   SIGUSR1},
+        {"SIGUSR2",   SIGUSR2},
+        {"SIGCHLD",   SIGCHLD},
+        {"SIGCONT",   SIGCONT},
+        {"SIGSTOP",   SIGSTOP},
+        {"SIGTSTP",   SIGTSTP},
+        {"SIGTTIN",   SIGTTIN},
+        {"SIGTTOU",   SIGTTOU}, 
+        {"SIGBUS",    SIGBUS},
+        {"SIGPOLL",   SIGPOLL},
+        {"SIGPROF",   SIGPROF},
+        {"SIGSYS",    SIGSYS},
+        {"SIGTRAP",   SIGTRAP},
+        {"SIGURG",    SIGURG},
+        {"SIGVTALRM", SIGVTALRM},
+        {"SIGXCPU",   SIGXCPU},
+        {"SIGXFSZ",   SIGXFSZ},
+        {"SIGIOT",    SIGIOT},
+        // {"SIGEMT",    SIGEMT},
+        {"SIGSTKFLT", SIGSTKFLT},
+        {"SIGIO",     SIGIO},
+        {"SIGCLD",    SIGCLD},
+        {"SIGPWR",    SIGPWR},
+        // {"SIGINFO",   SIGINFO},
+        // {"SIGLOST",   SIGLOST},
+        {"SIGWINCH",  SIGWINCH},
+        {"SIGUNUSED", SIGUNUSED}
+    };
+
+    int signal = -1;
+    pid_t pid;
+
+    char opt;
+    while((opt = getopt(argc, argv, "s:")) != -1) {
+        switch (opt) {
+            case 's':
+                signal = signal_map[string(optarg)];
+                break;
+        }
+    }
+    
+    if (signal == -1)
+        signal = SIGTERM;
+    // for (int i = optind; i < argc; i++) {
+    //     
+    // }
+
+    pid = stoul(argv[optind]);
+
+    return kill(pid, signal);
 }
 
 void printprompt(){
