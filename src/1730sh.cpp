@@ -28,7 +28,7 @@ void printprompt();
 void close_pipe(int pipefd[2]);
 void addtotable(pid_t pid, char** cmd, size_t cmd_size);
 
-void handle_stop(int signum); // ctrl-z
+void handle_stop(pid_t pid); // ctrl-z
 void handle_kill(int signum); // ctrl-c
 
 void handle_bg(int signum);
@@ -299,11 +299,14 @@ int main() {
         }
         
         if (!bg){ 
+            int status;
             for (unsigned int i = 0; i < procs.size(); i++){
-                waitpid(pid, last_wstatus, WUNTRACED); 
-                if (last_wstatus != nullptr && WIFSTOPPED(*last_wstatus)) // TODO: if you run jobs after doing ctrl-z, it hangs. Dunno why.
+                waitpid(pid, &status, WUNTRACED); 
+                if (WIFSTOPPED(status)) 
                     handle_stop(pid);
             }
+
+            *last_wstatus = status;
         }
         
         // Restore file descriptors 
@@ -426,11 +429,11 @@ void handle_bg(int signum){
     }
 }
 
-void handle_stop(int signum){
-    update_status(getpid(), "stopped");
+void handle_stop(pid_t pid){
+    //addtotable(); // need pid, command, and size of the command for char** iteration 
+    //update_status(pid, "stopped");
 
-    // send the suspend signal (SIGSTOP) to the pid (only the child should be calling this)
-    //kill(getpid(), SIGSTOP); 
+    printf("\n[%d] stopped", pid);
 }
 
 void handle_kill(int signum){
