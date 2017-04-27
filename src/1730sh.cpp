@@ -46,7 +46,7 @@ int main() {
         "kill [-s SIGNAL] PID – The kill utility sends the specified signal to the specified process or process group PID\n"
         "                       If no signal is specified, the SIGTERM signal is sent.\n";
     string line;
-    int * last_wstatus = nullptr;
+    int *last_wstatus = nullptr;
     
     signal(SIGINT, SIG_IGN);
     signal(SIGTSTP, SIG_IGN);
@@ -180,7 +180,6 @@ int main() {
                 
             //} 
             } else if (strcmp(argv[0], "jobs") == 0) {  // TODO: Write jobs cmd
-                printf("\n"); 
                 for (auto val : jobtable){
                     printf("[%d] %s %s\n", val.pid, val.cmd.c_str(), val.status.c_str()); 
                 }
@@ -221,11 +220,9 @@ int main() {
                     addtotable(pid, argv, k); 
                 
                 if (pid == 0){
-                    /* signal(SIGINT, SIG_DFL); */
-                    /* signal(SIGTSTP, SIG_DFL); */
-
+                    signal(SIGTSTP, SIG_DFL);
                     signal(SIGINT, handle_kill); // kill process, burn it with fire
-                    signal(SIGTSTP, handle_stop); // suspend process, stop it from running
+                    //signal(SIGTSTP, handle_stop); // suspend process, stop it from running
                                                   // note fg should handle suspended processes the same way as background ones.
                                                   // e.g if I suspend a process, I can continue it by using fg.
                                                   //     if I background a process, I can foreground it by using fg.
@@ -303,7 +300,9 @@ int main() {
         
         if (!bg){ 
             for (unsigned int i = 0; i < procs.size(); i++){
-                wait(last_wstatus); 
+                waitpid(pid, last_wstatus, WUNTRACED); 
+                if (last_wstatus != nullptr && WIFSTOPPED(*last_wstatus)) // TODO: if you run jobs after doing ctrl-z, it hangs. Dunno why.
+                    handle_stop(pid);
             }
         }
         
@@ -428,13 +427,15 @@ void handle_bg(int signum){
 }
 
 void handle_stop(int signum){
-    // send the suspend signal (SIGSTOP) to the pid (only the child should be calling this)
+    update_status(getpid(), "stopped");
 
-    
+    // send the suspend signal (SIGSTOP) to the pid (only the child should be calling this)
+    //kill(getpid(), SIGSTOP); 
 }
 
 void handle_kill(int signum){
     // send the kill signal (SIGKILL) to the pid (only the child should be calling this)
+    kill(getpid(), SIGKILL);
 }
 
 void update_status(pid_t pid, string status){
