@@ -428,19 +428,13 @@ void handle_bg(int signum){
 }
 
 void handle_stop(int signum){
-    // Get the right pid
+    // send the suspend signal (SIGSTOP) to the pid (only the child should be calling this)
+
     
-    // send the suspend signal (SIGSTOP) to the pid
-    // note that you don't need to handle changing the status of 
-    // the command here. That'll be handled in handle_bg.   
 }
 
 void handle_kill(int signum){
-    // Get the right pid
-
-    // send the kill signal (SIGKILL) to the pid
-    // note that you don't need to handle changing the status of 
-    // the command here. That'll be handled in handle_bg.   
+    // send the kill signal (SIGKILL) to the pid (only the child should be calling this)
 }
 
 void update_status(pid_t pid, string status){
