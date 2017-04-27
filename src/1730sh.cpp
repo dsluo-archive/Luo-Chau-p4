@@ -12,6 +12,7 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <map>
+#include <stdexcept>
 
 #include "BuiltIns.h"
 
@@ -176,7 +177,8 @@ int main() {
                     printf("[%d] %s %s\n", val.pgid, val.cmd.c_str(), val.status.c_str()); 
                 }
             } else if (strcmp(argv[0], "kill") == 0) {  // TODO: Write kill cmd
-                int status = kill(size, argv);
+                if (kill(size, argv) == -1)
+                    perror("kill");
             } else {
                 // TODO: Put into function, replace to make this look nicer. 
                 // TODO: If argv[0] is "bg", then need to remove it from vector.
@@ -375,7 +377,11 @@ int kill(int argc, char **argv) {
     while((opt = getopt(argc, argv, "s:")) != -1) {
         switch (opt) {
             case 's':
-                signal = signal_map[string(optarg)];
+                try {
+                    signal = stoi(optarg);
+                } catch (invalid_argument) {
+                    signal = signal_map[string(optarg)];
+                }
                 break;
         }
     }
