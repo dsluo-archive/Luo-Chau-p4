@@ -18,7 +18,7 @@
 using namespace std;
 
 typedef struct job_entry {
-    pid_t pid;
+    pid_t pgid;
     string status;
     string cmd; 
 } job_entry;
@@ -28,15 +28,15 @@ static vector<job_entry> jobtable;
 vector<string> tokenize(string str);
 void printprompt();
 void close_pipe(int pipefd[2]);
-void addtotable(pid_t pid, char** cmd, size_t cmd_size);
+void addtotable(pid_t pgid, string cmd);
 
 int kill(int argc, char **argv);
 
-void handle_stop(pid_t pid, char** cmd, size_t cmd_size); // ctrl-z
+void handle_stop(pid_t pgid, string cmd); // ctrl-z
 void handle_kill(int signum); // ctrl-c
 
 void handle_bg(int signum);
-void update_status(pid_t pid, string status);
+void update_status(pid_t pgid, string status);
 
 int main() {
     const char *HELP_MESSAGE =
@@ -127,9 +127,7 @@ int main() {
         pid_t pid;
         pid_t bg_pid = 0;
         vector<array<int, 2>> pipefds;
-        char **argv;
-        size_t size;
-
+        
         // for each process in procs,
         for (size_t i = 0; i < procs.size(); i++) {
             // create pipe for command
@@ -143,14 +141,14 @@ int main() {
             }
 
             // Construct argv
-            size = procs[i].size();
-            argv = new char*[size];
+            size_t size = procs[i].size();
+            char **argv = new char*[size];
             size_t k;
-            for (k = 0; k < procs[i].size(); k++) {
+            for (k = 0; k < size; k++) {
                 argv[k] = (char *) procs[i][k].c_str();
             }
             // argv must be null-terminated
-            argv[procs[i].size()] = nullptr;
+            argv[size] = nullptr;
 
             if (strcmp(argv[0], "cd") == 0) {
                 cd(argv[1]);
@@ -175,7 +173,7 @@ int main() {
             
             } else if (strcmp(argv[0], "jobs") == 0) {  // TODO: Write jobs cmd
                 for (auto val : jobtable){
-                    printf("[%d] %s %s\n", val.pid, val.cmd.c_str(), val.status.c_str()); 
+                    printf("[%d] %s %s\n", val.pgid, val.cmd.c_str(), val.status.c_str()); 
                 }
             } else if (strcmp(argv[0], "kill") == 0) {  // TODO: Write kill cmd
                 int status = kill(size, argv);
@@ -211,9 +209,11 @@ int main() {
                 }
 
                 pid = fork(); 
-                if (bg) 
-                    addtotable(pid, argv, k); 
-                
+                if (bg && (i == 0)){
+                    bg_pid = pid; 
+                    addtotable(bg_pid, line); 
+                }
+
                 if (pid == 0){
                     signal(SIGTSTP, SIG_DFL);
                     signal(SIGINT, handle_kill); // kill process, burn it with fire
@@ -236,7 +236,6 @@ int main() {
                     } else {
                         if (bg){
                             setpgid(0, 0); 
-                            bg_pid = getpid();
                         }
                    
                         if (dup2(infd, STDIN_FILENO) == -1) {
@@ -267,7 +266,7 @@ int main() {
                     for (unsigned int i = 0; i < pipefds.size(); i++){
                         close_pipe(pipefds.at(i).data()); 
                     }
-
+                
                     // populate arguments with argv
                     int status = execvp(procs[i][0].c_str(), argv);
                     delete[] argv;
@@ -288,6 +287,7 @@ int main() {
             }
 
         }
+
         // close all pipes when done
         for (unsigned int i = 0; i < pipefds.size(); i++){
             close_pipe(pipefds.at(i).data()); 
@@ -298,7 +298,7 @@ int main() {
             for (unsigned int i = 0; i < procs.size(); i++){
                 waitpid(pid, &status, WUNTRACED); 
                 if (WIFSTOPPED(status)) 
-                    handle_stop(pid, argv, size);
+                    handle_stop(pid, line);
             }
             
             last_wstatus = &status;
@@ -476,7 +476,7 @@ void handle_bg(int signum){
         // print status info out of handler. save this data in a global structure of sorts 
         if (WIFEXITED(status)){
             // update pid status
-            update_status(chld_pid, "done"); 
+            update_status(chld_pid, "exited"); 
         } else if (WIFSTOPPED(status)){
             // update pid status
             update_status(chld_pid, "stopped"); 
@@ -489,10 +489,9 @@ void handle_bg(int signum){
     }
 }
 
-//void handle_stop(pid_t pid){
-void handle_stop(pid_t pid, char **cmd, size_t cmd_size){
-    addtotable(pid, cmd, cmd_size); // need pid, command, and size of the command for char** iteration 
-    update_status(pid, "stopped");
+void handle_stop(pid_t pgid, string cmd){
+    addtotable(pgid, cmd); // need pid, command, and size of the command for char** iteration 
+    update_status(pgid, "stopped");
 
     //printf("\n[%d] stopped", pid);
 }
@@ -502,29 +501,24 @@ void handle_kill(int signum){
     kill(getpid(), SIGKILL);
 }
 
-void update_status(pid_t pid, string status){
+void update_status(pid_t pgid, string status){
     for (auto entry = jobtable.begin(); entry != jobtable.end(); entry++) {
         job_entry &job = *entry; 
     
-        if (job.pid != pid){
+        if (job.pgid != pgid){
             continue; 
         } else {
             job.status = status; 
-            printf("[%d] %s\n", job.pid, job.status.c_str());
+            printf("[%d] %s\n", job.pgid, job.status.c_str());
         }
     }
 }
 
-void addtotable(pid_t pid, char** cmd, size_t cmd_size){
-    string r_cmd = "";
-    for (size_t i = 0; i < cmd_size; i++){
-        r_cmd.append(cmd[i]);    
-    }
-
+void addtotable(pid_t pgid, string cmd){
     job_entry job; 
     
-    job.pid = pid;
-    job.cmd = r_cmd;
+    job.pgid = pgid;
+    job.cmd = cmd.c_str();
     job.status = "running";
 
     jobtable.push_back(job);     
