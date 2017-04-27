@@ -28,7 +28,7 @@ void printprompt();
 void close_pipe(int pipefd[2]);
 void addtotable(pid_t pid, char** cmd, size_t cmd_size);
 
-void handle_stop(pid_t pid); // ctrl-z
+void handle_stop(pid_t pid, char** cmd, size_t cmd_size); // ctrl-z
 void handle_kill(int signum); // ctrl-c
 
 void handle_bg(int signum);
@@ -123,6 +123,8 @@ int main() {
         pid_t pid;
         pid_t bg_pid = 0;
         vector<array<int, 2>> pipefds;
+        char **argv;
+        size_t size;
 
         // for each process in procs,
         for (size_t i = 0; i < procs.size(); i++) {
@@ -137,7 +139,8 @@ int main() {
             }
 
             // Construct argv
-            char **argv = new char*[procs[i].size()];
+            size = procs[i].size();
+            argv = new char*[size];
             size_t k;
             for (k = 0; k < procs[i].size(); k++) {
                 argv[k] = (char *) procs[i][k].c_str();
@@ -303,10 +306,10 @@ int main() {
             for (unsigned int i = 0; i < procs.size(); i++){
                 waitpid(pid, &status, WUNTRACED); 
                 if (WIFSTOPPED(status)) 
-                    handle_stop(pid);
+                    handle_stop(pid, argv, size);
             }
-
-            *last_wstatus = status;
+            
+            last_wstatus = &status;
         }
         
         // Restore file descriptors 
@@ -429,11 +432,12 @@ void handle_bg(int signum){
     }
 }
 
-void handle_stop(pid_t pid){
-    //addtotable(); // need pid, command, and size of the command for char** iteration 
-    //update_status(pid, "stopped");
+//void handle_stop(pid_t pid){
+void handle_stop(pid_t pid, char **cmd, size_t cmd_size){
+    addtotable(pid, cmd, cmd_size); // need pid, command, and size of the command for char** iteration 
+    update_status(pid, "stopped");
 
-    printf("\n[%d] stopped", pid);
+    //printf("\n[%d] stopped", pid);
 }
 
 void handle_kill(int signum){
