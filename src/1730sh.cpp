@@ -167,21 +167,8 @@ int main() {
             } else if (strcmp(argv[0], "help") == 0) {
                 printf(HELP_MESSAGE);
             } else if (strcmp(argv[0], "fg") == 0) {    // TODO: Write foreground cmd
-                // get the  
-
-            //} else if (strcmp(argv[0], "bg") == 0 || bg) {    // TODO: Write background cmd
-                //do the usual stuff if it weren't a built in command.
-                // if it's the first command, then set the group id to the new process id.
-                // for every other command, set the group id to the group id of the first command.
-
-                // if the child (e.g bg_pid == 0)
-                    // get the background process id
-                    // add the job to the table
-                    // do the exec and stuff
-                // if bg_pid < 0
-                    // perror
-                
-            //} 
+                  
+            
             } else if (strcmp(argv[0], "jobs") == 0) {  // TODO: Write jobs cmd
                 for (auto val : jobtable){
                     printf("[%d] %s %s\n", val.pid, val.cmd.c_str(), val.status.c_str()); 
