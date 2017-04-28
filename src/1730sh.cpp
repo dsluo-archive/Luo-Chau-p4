@@ -76,6 +76,7 @@ int main() {
 
     printprompt();
     while (getline(cin, line)) {
+    
         string in = "";
         string out = "";
         string err = "";
@@ -111,6 +112,7 @@ int main() {
             }
         }
         
+        // TODO: Need to handle output and input redirection anywhere. 
         for (auto it = tokens.begin(); it != tokens.end(); it++) {
             if ((it + 1) != tokens.end()) {
                 if (*it == "e>") { // TODO: Handling error redirection
@@ -201,7 +203,10 @@ int main() {
             } else if (strcmp(argv[0], "help") == 0) {
                 procs.clear(); 
                 printf(HELP_MESSAGE);
-            } else if (strcmp(argv[0], "fg") == 0) {    // TODO: Write foreground cmd
+
+            } else if (strcmp(argv[0], "bg") == 0) {    // TODO: need to write bg [jid]
+                 
+            } else if (strcmp(argv[0], "fg") == 0) {    // TODO: doesn't work for sigstppd processes
                 procs.clear(); 
                 pid_t ret_pgid = atoi(argv[1]);       
                 
@@ -216,7 +221,7 @@ int main() {
                     perror("kill");
                 }
                 
-                wait(&status);
+                waitpid(ret_pgid, &status, 0);
                 
                 // give terminal control back to the foreground process group
                 if (tcsetpgrp(STDIN_FILENO, getpgrp()) < 0){
@@ -228,6 +233,8 @@ int main() {
                 for (auto val : jobtable){
                     printf("[%d] %s %s\n", val.pgid, val.cmd.c_str(), val.status.c_str()); 
                 }
+            } else if (strcmp(argv[0], "export") == 0){ // TODO: export environmental variables
+            
             } else if (strcmp(argv[0], "kill") == 0) { 
                 procs.clear(); 
                 if (kill(size, argv) == -1)
@@ -340,6 +347,7 @@ int main() {
                         bg_pid = pid; 
                         addtotable(bg_pid, line); 
                     } 
+                    
                 }
             }
         }
@@ -351,10 +359,11 @@ int main() {
 
         if (!bg){  
             for (unsigned int i = 0; i < procs.size(); i++){ 
-                waitpid(pid, &status, WUNTRACED); 
+                int chldpid = waitpid(-1, &status, WUNTRACED); 
                 if (WIFSTOPPED(status)){
-                    setpgid(pid, pid);  // make the new background process its own process group
-                    handle_stop(pid, line); 
+                    setpgid(chldpid, chldpid);  // make the new background process its own process group
+
+                    handle_stop(chldpid, line); 
                 }
             }
         }
@@ -375,7 +384,6 @@ int main() {
         if (errfd != STDERR_FILENO && close(errfd) != 0)
             perror("close");
         
-
         printprompt();
     }
 
