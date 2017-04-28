@@ -49,6 +49,7 @@ int main() {
         "                       If no signal is specified, the SIGTERM signal is sent.\n";
     string line;
     int *last_wstatus = nullptr;
+    int status;
     
     signal(SIGINT, SIG_IGN);
     signal(SIGTSTP, SIG_IGN);
@@ -81,7 +82,24 @@ int main() {
         vector<string> tokens = tokenize(line);
         vector<vector<string>> procs; // TODO: Fix spacing splitting thing
         vector<string> proc;
-
+        
+        pid_t chld_pid; 
+        while ((chld_pid = waitpid(-1, &status, WNOHANG | WUNTRACED)) > 0){
+            // print status info out of handler. save this data in a global structure of sorts 
+            if (WIFEXITED(status)){
+                // update pid status
+                update_status(chld_pid, "exited"); 
+            } else if (WIFSTOPPED(status)){
+                // update pid status
+                update_status(chld_pid, "stopped"); 
+            } else if (WIFSIGNALED(status)){
+                // update pid status
+                update_status(chld_pid, "killed"); 
+            } else {
+                perror("waitpid");
+            }
+        }
+        
         for (auto it = tokens.begin(); it != tokens.end(); it++) {
             if ((it + 1) != tokens.end()) {
                 if (*it == "e>") { // TODO: Handling error redirection
@@ -152,8 +170,10 @@ int main() {
             argv[size] = nullptr;
 
             if (strcmp(argv[0], "cd") == 0) {
+                procs.clear(); // Don't know if this is good to do or not, but it solves the hanging after waiting after a background process
                 cd(argv[1]);
             } else if (strcmp(argv[0], "exit") == 0) {
+                procs.clear(); 
                 if (argv[1] != nullptr) {
                     exit(atoi(argv[1])); 
                 } else {
@@ -168,16 +188,22 @@ int main() {
                     exit(exit_status);
                 }
             } else if (strcmp(argv[0], "help") == 0) {
+                procs.clear(); 
                 printf(HELP_MESSAGE);
             } else if (strcmp(argv[0], "fg") == 0) {    // TODO: Write foreground cmd
+                procs.clear(); 
                 pid_t ret_pgid = atoi(argv[1]);       
                 
                 tcsetpgrp(STDOUT_FILENO, ret_pgid);
+            
+            
             } else if (strcmp(argv[0], "jobs") == 0) { 
+                procs.clear(); 
                 for (auto val : jobtable){
                     printf("[%d] %s %s\n", val.pgid, val.cmd.c_str(), val.status.c_str()); 
                 }
-            } else if (strcmp(argv[0], "kill") == 0) {  
+            } else if (strcmp(argv[0], "kill") == 0) { 
+                procs.clear(); 
                 if (kill(size, argv) == -1)
                     perror("kill");
             } else {
@@ -212,6 +238,8 @@ int main() {
 
                 pid = fork(); 
                 if (pid == 0){
+                    signal(SIGTTIN, SIG_DFL); 
+                    signal(SIGTTOU, SIG_DFL); 
                     signal(SIGTSTP, SIG_DFL);
                     signal(SIGINT, handle_kill); // kill process, burn it with fire
                     //signal(SIGTSTP, handle_stop); // suspend process, stop it from running
@@ -286,6 +314,7 @@ int main() {
                         bg_pid = pid; 
                         addtotable(bg_pid, line); 
                     } 
+                    
                 }
             }
         }
@@ -295,15 +324,12 @@ int main() {
             close_pipe(pipefds.at(i).data()); 
         }
 
-        if (!bg){  // need to set the pid to something else if builtin function so you don't wait on it
-            int status;
-            for (unsigned int i = 0; i < procs.size(); i++){
+        if (!bg){  
+            for (unsigned int i = 0; i < procs.size(); i++){ 
                 waitpid(pid, &status, WUNTRACED); 
-                if (WIFSTOPPED(status)) 
-                    handle_stop(pid, line);
             }
-            last_wstatus = &status;
         }
+        last_wstatus = &status;
         
         // Restore file descriptors 
         if (dup2(STDIN_FILENO, dfl_in) == -1)
