@@ -230,8 +230,9 @@ int main() {
                 }
             } else if (strcmp(argv[0], "jobs") == 0) { 
                 procs.clear(); 
+                printf("JID\tSTAT\tCOMMAND\n"); 
                 for (auto val : jobtable){
-                    printf("[%d] %s %s\n", val.pgid, val.cmd.c_str(), val.status.c_str()); 
+                    printf("[%d] %s\t%s\n", val.pgid, val.status.c_str(), val.cmd.c_str()); 
                 }
             } else if (strcmp(argv[0], "export") == 0){ // TODO: export environmental variables
             
@@ -240,9 +241,6 @@ int main() {
                 if (kill(size, argv) == -1)
                     perror("kill");
             } else {
-                // TODO: Put into function, replace to make this look nicer. 
-                // TODO: If argv[0] is "bg", then need to remove it from vector.
-             
                 if (i == 0){
                     if (in != "") {
                         if ((infd = open(in.c_str(), O_RDONLY)) == -1){
@@ -285,7 +283,9 @@ int main() {
                     // if not the first command 
                     if (i != 0){ 
                         if (bg){
-                            setpgid(0, bg_pid);  
+                            if (setpgid(0, bg_pid) == -1){
+                                perror("setpgid"); 
+                            }  
                         }
                          
                         if (dup2(pipefds.at(i - 1)[0], STDIN_FILENO) == -1){
@@ -294,7 +294,9 @@ int main() {
                         }
                     } else {
                         if (bg){
-                            setpgid(0, 0); 
+                            if (setpgid(0, 0) == -1){
+                                perror("setpgid"); 
+                            } 
                         }
 
                         if (dup2(infd, STDIN_FILENO) == -1) {
@@ -325,7 +327,7 @@ int main() {
                     for (unsigned int i = 0; i < pipefds.size(); i++){
                         close_pipe(pipefds.at(i).data()); 
                     }
-                
+                    
                     // populate arguments with argv
                     int status = execvp(procs[i][0].c_str(), argv);
                     delete[] argv;
@@ -359,11 +361,12 @@ int main() {
 
         if (!bg){  
             for (unsigned int i = 0; i < procs.size(); i++){ 
-                int chldpid = waitpid(-1, &status, WUNTRACED); 
+                waitpid(pid, &status, WUNTRACED); 
                 if (WIFSTOPPED(status)){
-                    setpgid(chldpid, chldpid);  // make the new background process its own process group
-
-                    handle_stop(chldpid, line); 
+                    if(setpgid(pid, pid) == -1){ // TODO: permission denied
+                        perror("setpgid");
+                    } // make the new background process its own process group
+                    handle_stop(pid, line); 
                 }
             }
         }
