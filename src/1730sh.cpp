@@ -4,15 +4,13 @@
 #include <cstdlib>
 #include <iostream>
 #include <vector>
+#include <map>
 #include <iterator>
 #include <unistd.h>
 #include <string.h>
 #include <sys/wait.h>
 #include <sys/types.h>
 #include <fcntl.h>
-#include <signal.h>
-#include <map>
-#include <stdexcept>
 
 #include "BuiltIns.h"
 
@@ -29,9 +27,8 @@ static vector<job_entry> jobtable;
 vector<string> tokenize(string str);
 void printprompt();
 void close_pipe(int pipefd[2]);
-void addtotable(pid_t pgid, string cmd);
-
 int kill(int argc, char **argv);
+void addtotable(pid_t pgid, string cmd);
 
 void handle_stop(pid_t pgid, string cmd); // ctrl-z
 void handle_kill(int signum); // ctrl-c
@@ -57,6 +54,8 @@ int main() {
     signal(SIGTSTP, SIG_IGN);
     signal(SIGCHLD, handle_bg);
 
+    signal(SIGTTOU, SIG_IGN);
+    
     int dfl_in = dup(STDIN_FILENO);
     if (dfl_in == -1) { perror("dup"); exit(EXIT_FAILURE); }
     int dfl_out = dup(STDOUT_FILENO);
@@ -80,28 +79,28 @@ int main() {
         bool bg = false;
 
         vector<string> tokens = tokenize(line);
-        vector<vector<string>> procs;
+        vector<vector<string>> procs; // TODO: Fix spacing splitting thing
         vector<string> proc;
 
         for (auto it = tokens.begin(); it != tokens.end(); it++) {
             if ((it + 1) != tokens.end()) {
-                if (*it == "e>") {
+                if (*it == "e>") { // TODO: Handling error redirection
                     err_append = false;
                     err = *(it + 1);
                     it++;
-                } else if (*it == "e>>") {
+                } else if (*it == "e>>") { // TODO: Handling error redirection
                     err_append = true;
                     err = *(it + 1);
                     it++;
-                } else if (*it == ">") {
+                } else if (*it == ">") { // TODO: Handling output redirection
                     out_append = false;
                     out = *(it + 1);
                     it++;
-                } else if (*it == ">>") {
+                } else if (*it == ">>") { // TODO: Handling output redirection
                     out_append = true;
                     out = *(it + 1);
                     it++;
-                } else if (*it == "<") {
+                } else if (*it == "<") { // TODO: Handling input redirection
                     in = *(it + 1);
                     it++;
                 } else if (*it == "|") {
@@ -128,6 +127,7 @@ int main() {
         pid_t pid;
         pid_t bg_pid = 0;
         vector<array<int, 2>> pipefds;
+        vector<pid_t> pids;
         
         // for each process in procs,
         for (size_t i = 0; i < procs.size(); i++) {
@@ -170,13 +170,14 @@ int main() {
             } else if (strcmp(argv[0], "help") == 0) {
                 printf(HELP_MESSAGE);
             } else if (strcmp(argv[0], "fg") == 0) {    // TODO: Write foreground cmd
-                  
-            
-            } else if (strcmp(argv[0], "jobs") == 0) {  // TODO: Write jobs cmd
+                pid_t ret_pgid = atoi(argv[1]);       
+                
+                tcsetpgrp(STDOUT_FILENO, ret_pgid);
+            } else if (strcmp(argv[0], "jobs") == 0) { 
                 for (auto val : jobtable){
                     printf("[%d] %s %s\n", val.pgid, val.cmd.c_str(), val.status.c_str()); 
                 }
-            } else if (strcmp(argv[0], "kill") == 0) {  // TODO: Write kill cmd
+            } else if (strcmp(argv[0], "kill") == 0) {  
                 if (kill(size, argv) == -1)
                     perror("kill");
             } else {
@@ -191,7 +192,6 @@ int main() {
                         }
                     }
                 }
-
 
                 if (i == procs.size() - 1){
                     if (out != "") {
@@ -211,11 +211,6 @@ int main() {
                 }
 
                 pid = fork(); 
-                if (bg && (i == 0)){
-                    bg_pid = pid; 
-                    addtotable(bg_pid, line); 
-                }
-
                 if (pid == 0){
                     signal(SIGTSTP, SIG_DFL);
                     signal(SIGINT, handle_kill); // kill process, burn it with fire
@@ -224,6 +219,7 @@ int main() {
                                                   // e.g if I suspend a process, I can continue it by using fg.
                                                   //     if I background a process, I can foreground it by using fg.
                                                   // both should do the same thing, but handling will be a little different.
+                    
                     
                     // if not the first command 
                     if (i != 0){ 
@@ -239,7 +235,7 @@ int main() {
                         if (bg){
                             setpgid(0, 0); 
                         }
-                   
+
                         if (dup2(infd, STDIN_FILENO) == -1) {
                             perror("dup2");
                             exit(EXIT_FAILURE);
@@ -258,7 +254,7 @@ int main() {
                             exit(EXIT_FAILURE);
                         }
                         
-                        if (dup2(errfd, STDERR_FILENO) == -1) {
+                        if (dup2(errfd, STDERR_FILENO) == -1){ 
                             perror("dup2");
                             exit(EXIT_FAILURE);
                         }
@@ -284,25 +280,28 @@ int main() {
                 } else if (pid < 0){
                     perror("fork"); 
                     exit(EXIT_FAILURE);
-                } 
-
+                } else {
+                    if (bg && (i == 0)){
+                        //setpgid(pid, pid); 
+                        bg_pid = pid; 
+                        addtotable(bg_pid, line); 
+                    } 
+                }
             }
-
         }
-
+        
         // close all pipes when done
         for (unsigned int i = 0; i < pipefds.size(); i++){
             close_pipe(pipefds.at(i).data()); 
         }
-        
-        if (!bg){ 
+
+        if (!bg){  // need to set the pid to something else if builtin function so you don't wait on it
             int status;
             for (unsigned int i = 0; i < procs.size(); i++){
                 waitpid(pid, &status, WUNTRACED); 
                 if (WIFSTOPPED(status)) 
                     handle_stop(pid, line);
             }
-            
             last_wstatus = &status;
         }
         
@@ -321,80 +320,12 @@ int main() {
         if (errfd != STDERR_FILENO && close(errfd) != 0)
             perror("close");
         
+
         printprompt();
     }
 
     printf("\n");
     return EXIT_SUCCESS;
-}
-
-int kill(int argc, char **argv) {
-    map<string, int> signal_map = {
-        {"SIGHUP",    SIGHUP},
-        {"SIGINT",    SIGINT},
-        {"SIGQUIT",   SIGQUIT},
-        {"SIGILL",    SIGILL},
-        {"SIGABRT",   SIGABRT},
-        {"SIGFPE",    SIGFPE},
-        {"SIGKILL",   SIGKILL},
-        {"SIGSEGV",   SIGSEGV},
-        {"SIGPIPE",   SIGPIPE},
-        {"SIGALRM",   SIGALRM},
-        {"SIGTERM",   SIGTERM},
-        {"SIGUSR1",   SIGUSR1},
-        {"SIGUSR2",   SIGUSR2},
-        {"SIGCHLD",   SIGCHLD},
-        {"SIGCONT",   SIGCONT},
-        {"SIGSTOP",   SIGSTOP},
-        {"SIGTSTP",   SIGTSTP},
-        {"SIGTTIN",   SIGTTIN},
-        {"SIGTTOU",   SIGTTOU}, 
-        {"SIGBUS",    SIGBUS},
-        {"SIGPOLL",   SIGPOLL},
-        {"SIGPROF",   SIGPROF},
-        {"SIGSYS",    SIGSYS},
-        {"SIGTRAP",   SIGTRAP},
-        {"SIGURG",    SIGURG},
-        {"SIGVTALRM", SIGVTALRM},
-        {"SIGXCPU",   SIGXCPU},
-        {"SIGXFSZ",   SIGXFSZ},
-        {"SIGIOT",    SIGIOT},
-        // {"SIGEMT",    SIGEMT},
-        {"SIGSTKFLT", SIGSTKFLT},
-        {"SIGIO",     SIGIO},
-        {"SIGCLD",    SIGCLD},
-        {"SIGPWR",    SIGPWR},
-        // {"SIGINFO",   SIGINFO},
-        // {"SIGLOST",   SIGLOST},
-        {"SIGWINCH",  SIGWINCH},
-        {"SIGUNUSED", SIGUNUSED}
-    };
-
-    int signal = -1;
-    pid_t pid;
-
-    char opt;
-    while((opt = getopt(argc, argv, "s:")) != -1) {
-        switch (opt) {
-            case 's':
-                try {
-                    signal = stoi(optarg);
-                } catch (invalid_argument) {
-                    signal = signal_map[string(optarg)];
-                }
-                break;
-        }
-    }
-    
-    if (signal == -1)
-        signal = SIGTERM;
-    // for (int i = optind; i < argc; i++) {
-    //     
-    // }
-
-    pid = stoul(argv[optind]);
-
-    return kill(pid, signal);
 }
 
 void printprompt(){
@@ -474,6 +405,72 @@ void close_pipe(int pipefd[2]){
     }
 }
 
+int kill(int argc, char **argv) {
+    map<string, int> signal_map = {
+        {"SIGHUP",    SIGHUP},
+        {"SIGINT",    SIGINT},
+        {"SIGQUIT",   SIGQUIT},
+        {"SIGILL",    SIGILL},
+        {"SIGABRT",   SIGABRT},
+        {"SIGFPE",    SIGFPE},
+        {"SIGKILL",   SIGKILL},
+        {"SIGSEGV",   SIGSEGV},
+        {"SIGPIPE",   SIGPIPE},
+        {"SIGALRM",   SIGALRM},
+        {"SIGTERM",   SIGTERM},
+        {"SIGUSR1",   SIGUSR1},
+        {"SIGUSR2",   SIGUSR2},
+        {"SIGCHLD",   SIGCHLD},
+        {"SIGCONT",   SIGCONT},
+        {"SIGSTOP",   SIGSTOP},
+        {"SIGTSTP",   SIGTSTP},
+        {"SIGTTIN",   SIGTTIN},
+        {"SIGTTOU",   SIGTTOU}, 
+        {"SIGBUS",    SIGBUS},
+        {"SIGPOLL",   SIGPOLL},
+        {"SIGPROF",   SIGPROF},
+        {"SIGSYS",    SIGSYS},
+        {"SIGTRAP",   SIGTRAP},
+        {"SIGURG",    SIGURG},
+        {"SIGVTALRM", SIGVTALRM},
+        {"SIGXCPU",   SIGXCPU},
+        {"SIGXFSZ",   SIGXFSZ},
+        {"SIGIOT",    SIGIOT},
+        // {"SIGEMT",    SIGEMT},
+        {"SIGSTKFLT", SIGSTKFLT},
+        {"SIGIO",     SIGIO},
+        {"SIGCLD",    SIGCLD},
+        {"SIGPWR",    SIGPWR},
+        // {"SIGINFO",   SIGINFO},
+        // {"SIGLOST",   SIGLOST},
+        {"SIGWINCH",  SIGWINCH},
+        {"SIGUNUSED", SIGUNUSED}
+    };
+
+    int signal = -1;
+    pid_t pid;
+
+    char opt;
+    while((opt = getopt(argc, argv, "s:")) != -1) {
+        switch (opt) {
+            case 's':
+                try {
+                    signal = stoi(optarg);
+                } catch (invalid_argument) {
+                    signal = signal_map[string(optarg)];
+                }
+                break;
+        }
+    }
+    
+    if (signal == -1)
+        signal = SIGTERM;
+    
+    pid = stoul(argv[optind]);
+
+    return kill(pid, signal);
+}
+
 void handle_bg(int signum){
     pid_t chld_pid;
     int status;
@@ -496,10 +493,15 @@ void handle_bg(int signum){
 }
 
 void handle_stop(pid_t pgid, string cmd){
-    addtotable(pgid, cmd); // need pid, command, and size of the command for char** iteration 
-    update_status(pgid, "stopped");
+    for (auto entry : jobtable){ // really just a hacked solution. You'll understand if you read the code. 
+        if (entry.pgid == pgid)
+            break;
+        else
+            addtotable(pgid, cmd); 
+    }
 
-    //printf("\n[%d] stopped", pid);
+    //addtotable(pgid, cmd);  
+    update_status(pgid, "stopped");
 }
 
 void handle_kill(int signum){
@@ -515,7 +517,7 @@ void update_status(pid_t pgid, string status){
             continue; 
         } else {
             job.status = status; 
-            printf("[%d] %s\n", job.pgid, job.status.c_str());
+            printf("UPDATE: [%d] %s %s\n", job.pgid, job.cmd.c_str(), job.status.c_str());
         }
     }
 }
@@ -524,8 +526,10 @@ void addtotable(pid_t pgid, string cmd){
     job_entry job; 
     
     job.pgid = pgid;
-    job.cmd = cmd.c_str();
+    job.cmd = cmd;
     job.status = "running";
 
     jobtable.push_back(job);     
+    
+    printf("\nADD: [%d] %s %s\n", job.pgid, job.cmd.c_str(), job.status.c_str());
 }
