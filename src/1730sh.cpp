@@ -205,18 +205,20 @@ int main() {
                 procs.clear(); 
                 pid_t ret_pgid = atoi(argv[1]);       
                 
-                // get terminal control from the shell that started this shell
+                // give terminal control to the background process group
                 if (tcsetpgrp(STDIN_FILENO, ret_pgid) < 0){
                     perror("tcsetpgrp");
                     exit(EXIT_FAILURE); 
                 }
-
+                
+                // continue stopped processes
                 if (kill(ret_pgid, SIGCONT) < 0){
                     perror("kill");
                 }
-
+                
                 wait(&status);
-
+                
+                // give terminal control back to the foreground process group
                 if (tcsetpgrp(STDIN_FILENO, getpgrp()) < 0){
                     perror("tcsetpgrp");
                     exit(EXIT_FAILURE); 
@@ -264,7 +266,7 @@ int main() {
                 if (pid == 0){
                     signal(SIGTTIN, SIG_DFL); 
                     signal(SIGTTOU, SIG_DFL); 
-                    signal(SIGTSTP, SIG_DFL); // TODO: Need to get this working again. Can just check the next wait for a stop sig and handle then, or implement a sig handler now.
+                    signal(SIGTSTP, SIG_DFL); 
                     signal(SIGINT, handle_kill); // kill process, burn it with fire
                     //signal(SIGTSTP, handle_stop); // suspend process, stop it from running
                                                   // note fg should handle suspended processes the same way as background ones.
@@ -338,7 +340,6 @@ int main() {
                         bg_pid = pid; 
                         addtotable(bg_pid, line); 
                     } 
-                    
                 }
             }
         }
@@ -351,11 +352,10 @@ int main() {
         if (!bg){  
             for (unsigned int i = 0; i < procs.size(); i++){ 
                 waitpid(pid, &status, WUNTRACED); 
-
-                /* int chld_pid = waitpid(pid, &status, WUNTRACED); */
-                /* if (WIFSTOPPED(status)){ */
-                /*     handle_stop(chld_pid, line); */
-                /* } */ 
+                if (WIFSTOPPED(status)){
+                    setpgid(pid, pid);  // make the new background process its own process group
+                    handle_stop(pid, line); 
+                }
             }
         }
         last_wstatus = &status;
@@ -482,11 +482,15 @@ void handle_bg(int signum){
 }
 
 void handle_stop(pid_t pgid, string cmd){
-    for (auto entry : jobtable){ // really just a hacked solution. You'll understand if you read the code. 
-        if (entry.pgid == pgid)
-            break;
-        else
-            addtotable(pgid, cmd); 
+    if (jobtable.empty()){
+        addtotable(pgid, cmd); 
+    } else {
+        for (auto entry : jobtable){ // really just a hacked solution. You'll understand if you read the code. 
+            if (entry.pgid == pgid)
+                break;
+            else
+                addtotable(pgid, cmd); 
+        }
     }
 
     update_status(pgid, "stopped");
