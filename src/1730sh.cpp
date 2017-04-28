@@ -264,7 +264,7 @@ int main() {
                 if (pid == 0){
                     signal(SIGTTIN, SIG_DFL); 
                     signal(SIGTTOU, SIG_DFL); 
-                    signal(SIGTSTP, SIG_DFL);
+                    signal(SIGTSTP, SIG_DFL); // TODO: Need to get this working again. Can just check the next wait for a stop sig and handle then, or implement a sig handler now.
                     signal(SIGINT, handle_kill); // kill process, burn it with fire
                     //signal(SIGTSTP, handle_stop); // suspend process, stop it from running
                                                   // note fg should handle suspended processes the same way as background ones.
@@ -351,6 +351,11 @@ int main() {
         if (!bg){  
             for (unsigned int i = 0; i < procs.size(); i++){ 
                 waitpid(pid, &status, WUNTRACED); 
+
+                /* int chld_pid = waitpid(pid, &status, WUNTRACED); */
+                /* if (WIFSTOPPED(status)){ */
+                /*     handle_stop(chld_pid, line); */
+                /* } */ 
             }
         }
         last_wstatus = &status;
@@ -484,7 +489,6 @@ void handle_stop(pid_t pgid, string cmd){
             addtotable(pgid, cmd); 
     }
 
-    //addtotable(pgid, cmd);  
     update_status(pgid, "stopped");
 }
 
