@@ -4,7 +4,6 @@
 #include <cstdlib>
 #include <iostream>
 #include <vector>
-#include <map>
 #include <iterator>
 #include <unistd.h>
 #include <string.h>
@@ -27,7 +26,6 @@ static vector<job_entry> jobtable;
 vector<string> tokenize(string str);
 void printprompt();
 void close_pipe(int pipefd[2]);
-int kill(int argc, char **argv);
 void addtotable(pid_t pgid, string cmd);
 
 void handle_stop(pid_t pgid, string cmd); // ctrl-z
@@ -54,7 +52,7 @@ int main() {
     signal(SIGINT, SIG_IGN);
     signal(SIGTSTP, SIG_IGN);
     signal(SIGCHLD, handle_bg);
-
+    signal(SIGTTIN, SIG_IGN);
     signal(SIGTTOU, SIG_IGN);
     
     int dfl_in = dup(STDIN_FILENO);
@@ -63,6 +61,18 @@ int main() {
     if (dfl_out == -1) { perror("dup"); exit(EXIT_FAILURE); }
     int dfl_err = dup(STDERR_FILENO);
     if (dfl_err == -1) { perror("dup"); exit(EXIT_FAILURE); }
+
+    // Make the shell its own process leader
+    if (setpgid(getpid(), getpid()) < 0){
+        perror("setpgid");
+        exit(EXIT_FAILURE); 
+    }
+    
+    // get terminal control from the shell that started this shell
+    if (tcsetpgrp(STDIN_FILENO, getpgrp()) < 0){
+        perror("tcsetpgrp");
+        exit(EXIT_FAILURE); 
+    }
 
     printprompt();
     while (getline(cin, line)) {
@@ -83,6 +93,7 @@ int main() {
         vector<vector<string>> procs; // TODO: Fix spacing splitting thing
         vector<string> proc;
         
+        // Reap children, pick up background process updates, etc. 
         pid_t chld_pid; 
         while ((chld_pid = waitpid(-1, &status, WNOHANG | WUNTRACED)) > 0){
             // print status info out of handler. save this data in a global structure of sorts 
@@ -194,9 +205,22 @@ int main() {
                 procs.clear(); 
                 pid_t ret_pgid = atoi(argv[1]);       
                 
-                tcsetpgrp(STDOUT_FILENO, ret_pgid);
-            
-            
+                // get terminal control from the shell that started this shell
+                if (tcsetpgrp(STDIN_FILENO, ret_pgid) < 0){
+                    perror("tcsetpgrp");
+                    exit(EXIT_FAILURE); 
+                }
+
+                if (kill(ret_pgid, SIGCONT) < 0){
+                    perror("kill");
+                }
+
+                wait(&status);
+
+                if (tcsetpgrp(STDIN_FILENO, getpgrp()) < 0){
+                    perror("tcsetpgrp");
+                    exit(EXIT_FAILURE); 
+                }
             } else if (strcmp(argv[0], "jobs") == 0) { 
                 procs.clear(); 
                 for (auto val : jobtable){
@@ -429,72 +453,6 @@ void close_pipe(int pipefd[2]){
         perror("close");
         exit(EXIT_FAILURE); 
     }
-}
-
-int kill(int argc, char **argv) {
-    map<string, int> signal_map = {
-        {"SIGHUP",    SIGHUP},
-        {"SIGINT",    SIGINT},
-        {"SIGQUIT",   SIGQUIT},
-        {"SIGILL",    SIGILL},
-        {"SIGABRT",   SIGABRT},
-        {"SIGFPE",    SIGFPE},
-        {"SIGKILL",   SIGKILL},
-        {"SIGSEGV",   SIGSEGV},
-        {"SIGPIPE",   SIGPIPE},
-        {"SIGALRM",   SIGALRM},
-        {"SIGTERM",   SIGTERM},
-        {"SIGUSR1",   SIGUSR1},
-        {"SIGUSR2",   SIGUSR2},
-        {"SIGCHLD",   SIGCHLD},
-        {"SIGCONT",   SIGCONT},
-        {"SIGSTOP",   SIGSTOP},
-        {"SIGTSTP",   SIGTSTP},
-        {"SIGTTIN",   SIGTTIN},
-        {"SIGTTOU",   SIGTTOU}, 
-        {"SIGBUS",    SIGBUS},
-        {"SIGPOLL",   SIGPOLL},
-        {"SIGPROF",   SIGPROF},
-        {"SIGSYS",    SIGSYS},
-        {"SIGTRAP",   SIGTRAP},
-        {"SIGURG",    SIGURG},
-        {"SIGVTALRM", SIGVTALRM},
-        {"SIGXCPU",   SIGXCPU},
-        {"SIGXFSZ",   SIGXFSZ},
-        {"SIGIOT",    SIGIOT},
-        // {"SIGEMT",    SIGEMT},
-        {"SIGSTKFLT", SIGSTKFLT},
-        {"SIGIO",     SIGIO},
-        {"SIGCLD",    SIGCLD},
-        {"SIGPWR",    SIGPWR},
-        // {"SIGINFO",   SIGINFO},
-        // {"SIGLOST",   SIGLOST},
-        {"SIGWINCH",  SIGWINCH},
-        {"SIGUNUSED", SIGUNUSED}
-    };
-
-    int signal = -1;
-    pid_t pid;
-
-    char opt;
-    while((opt = getopt(argc, argv, "s:")) != -1) {
-        switch (opt) {
-            case 's':
-                try {
-                    signal = stoi(optarg);
-                } catch (invalid_argument) {
-                    signal = signal_map[string(optarg)];
-                }
-                break;
-        }
-    }
-    
-    if (signal == -1)
-        signal = SIGTERM;
-    
-    pid = stoul(argv[optind]);
-
-    return kill(pid, signal);
 }
 
 void handle_bg(int signum){
