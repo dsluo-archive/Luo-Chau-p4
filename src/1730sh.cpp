@@ -24,7 +24,7 @@ typedef struct job_entry {
 static vector<job_entry> jobtable;
 
 vector<string> tokenize(string str);
-void printprompt();
+string printprompt();
 void close_pipe(int pipefd[2]);
 void addtotable(pid_t pgid, string cmd);
 
@@ -51,9 +51,9 @@ int main() {
     
     signal(SIGINT, SIG_IGN);
     signal(SIGTSTP, SIG_IGN);
-    signal(SIGCHLD, handle_bg);
     signal(SIGTTIN, SIG_IGN);
     signal(SIGTTOU, SIG_IGN);
+    signal(SIGCHLD, handle_bg);
     
     int dfl_in = dup(STDIN_FILENO);
     if (dfl_in == -1) { perror("dup"); exit(EXIT_FAILURE); }
@@ -76,7 +76,6 @@ int main() {
 
     printprompt();
     while (getline(cin, line)) {
-    
         string in = "";
         string out = "";
         string err = "";
@@ -230,9 +229,11 @@ int main() {
                 }
             } else if (strcmp(argv[0], "jobs") == 0) { 
                 procs.clear(); 
-                printf("JID\tSTAT\tCOMMAND\n"); 
-                for (auto val : jobtable){
-                    printf("[%d] %s\t%s\n", val.pgid, val.status.c_str(), val.cmd.c_str()); 
+                if (!jobtable.empty()){
+                    printf("JID\tSTAT\tCOMMAND\n"); 
+                    for (auto val : jobtable){
+                        printf("[%d] %s\t%s\n", val.pgid, val.status.c_str(), val.cmd.c_str()); 
+                    }
                 }
             } else if (strcmp(argv[0], "export") == 0){ // TODO: export environmental variables
             
@@ -278,8 +279,7 @@ int main() {
                                                   // e.g if I suspend a process, I can continue it by using fg.
                                                   //     if I background a process, I can foreground it by using fg.
                                                   // both should do the same thing, but handling will be a little different.
-                    
-                    
+            
                     // if not the first command 
                     if (i != 0){ 
                         if (bg){
@@ -345,15 +345,17 @@ int main() {
                     exit(EXIT_FAILURE);
                 } else {
                     if (bg && (i == 0)){
-                        //setpgid(pid, pid); 
+                        if (setpgid(pid, pid) == -1){
+                            perror("setpgid"); 
+                        }
+
                         bg_pid = pid; 
                         addtotable(bg_pid, line); 
                     } 
-                    
                 }
             }
         }
-        
+
         // close all pipes when done
         for (unsigned int i = 0; i < pipefds.size(); i++){
             close_pipe(pipefds.at(i).data()); 
@@ -363,9 +365,6 @@ int main() {
             for (unsigned int i = 0; i < procs.size(); i++){ 
                 waitpid(pid, &status, WUNTRACED); 
                 if (WIFSTOPPED(status)){
-                    if(setpgid(pid, pid) == -1){ // TODO: permission denied
-                        perror("setpgid");
-                    } // make the new background process its own process group
                     handle_stop(pid, line); 
                 }
             }
@@ -409,6 +408,7 @@ void printprompt(){
         perror("getenv");     
 
     // Check the current working directory versus the home directory.
+    string real_path; 
     printf("1730sh: ");
     if (strlen(p) >= strlen(homedir)){
         char *rpath = p + strlen(homedir);
@@ -416,6 +416,8 @@ void printprompt(){
     } else {
         printf("%s$ ", p); 
     }
+
+    return real_path;
 }
 
 vector<string> tokenize(string str) {
@@ -475,7 +477,7 @@ void handle_bg(int signum){
     pid_t chld_pid;
     int status;
 
-    while ((chld_pid = waitpid(-1, &status, WNOHANG)) > 0){
+    while ((chld_pid = waitpid(-1, &status, WNOHANG | WUNTRACED)) > 0){
         // print status info out of handler. save this data in a global structure of sorts 
         if (WIFEXITED(status)){
             // update pid status
@@ -490,6 +492,7 @@ void handle_bg(int signum){
             perror("waitpid");
         }
     }
+
 }
 
 void handle_stop(pid_t pgid, string cmd){
