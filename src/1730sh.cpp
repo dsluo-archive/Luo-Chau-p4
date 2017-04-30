@@ -85,6 +85,7 @@ int main() {
         line = string(line_read);
         free(line_read);
         delete [] prompt;
+
         string in = "";
         string out = "";
         string err = "";
@@ -99,7 +100,7 @@ int main() {
         bool bg = false;
 
         vector<string> tokens = tokenize(line);
-        vector<vector<string>> procs; // TODO: Fix spacing splitting thing
+        vector<vector<string>> procs; 
         vector<string> proc;
         
         // Reap children, pick up background process updates, etc. 
@@ -221,7 +222,6 @@ int main() {
                 // give terminal control to the background process group
                 if (tcsetpgrp(STDIN_FILENO, ret_pgid) < 0){
                     perror("tcsetpgrp");
-                    exit(EXIT_FAILURE); 
                 }
                 
                 // continue stopped processes
@@ -278,6 +278,31 @@ int main() {
                 }
 
                 pid = fork(); 
+
+                if (pid > 0){
+                    if (i == 0){
+                        if (setpgid(pid, pid) == -1){ 
+                            perror("setpgid"); 
+                        }
+                    } else {
+                        if (setpgid(pid, bg_pid) == -1){
+                            perror("setpgid"); 
+                        }
+                    }
+                    
+                    if (!bg){
+                        if (tcsetpgrp(STDIN_FILENO, pid) < 0){
+                            perror("tcsetpgrp");
+                            exit(EXIT_FAILURE); 
+                        }
+                    } else {
+                        if (tcsetpgrp(STDIN_FILENO, getpgrp()) < 0){
+                            perror("tcsetpgrp");
+                            exit(EXIT_FAILURE); 
+                        }
+                    }
+                }
+                
                 if (pid == 0){
                     signal(SIGTTIN, SIG_DFL); 
                     signal(SIGTTOU, SIG_DFL); 
@@ -288,32 +313,37 @@ int main() {
                                                   // e.g if I suspend a process, I can continue it by using fg.
                                                   //     if I background a process, I can foreground it by using fg.
                                                   // both should do the same thing, but handling will be a little different.
+           
             
                     // if not the first command 
                     if (i != 0){ 
-                        if (bg){
-                            if (setpgid(0, bg_pid) == -1){
-                                perror("setpgid"); 
-                            }  
-                        }
-                         
+                        /* if (bg){ */
+                        /*     /1* if (setpgid(0, bg_pid) == -1){ *1/ */
+                        /*     /1*     perror("setpgid"); *1/ */ 
+                        /*     /1* } *1/ */  
+                        /* } */
+
                         if (dup2(pipefds.at(i - 1)[0], STDIN_FILENO) == -1){
                             perror("dup2");
                             exit(EXIT_FAILURE); 
                         }
                     } else {
-                        if (bg){
-                            if (setpgid(0, 0) == -1){
-                                perror("setpgid"); 
-                            } 
-                        }
+                        /* if (bg){ */
+                        /*     /1* if (setpgid(0, 0) == -1){ *1/ */
+                        /*     /1*     perror("setpgid"); *1/ */ 
+                        /*     /1* } *1/ */ 
+                        /* } */
+                        
+                        if (setpgid(0, 0) == -1){
+                            perror("setpgid"); 
+                        } 
 
                         if (dup2(infd, STDIN_FILENO) == -1) {
                             perror("dup2");
                             exit(EXIT_FAILURE);
                         }
                     }
-
+                    
                     // if not the last command
                     if (i != procs.size() - 1){ 
                         if (dup2(pipefds.at(i)[1], STDOUT_FILENO) == -1){
@@ -353,14 +383,20 @@ int main() {
                     perror("fork"); 
                     exit(EXIT_FAILURE);
                 } else {
-                    if (bg && (i == 0)){
-                        if (setpgid(pid, pid) == -1){
-                            perror("setpgid"); 
-                        }
+                    /* if (bg && (i == 0)){ */
+                    /*     if (setpgid(pid, pid) == -1){ */
+                    /*         perror("setpgid"); */ 
+                    /*     } */
 
-                        bg_pid = pid; 
-                        addtotable(bg_pid, line); 
+                    /*     bg_pid = pid; */ 
+                    /*     addtotable(bg_pid, line); */ 
+                    /* } */ 
+                    
+                    if (bg && (i == 0)){
+                        bg_pid = pid;
+                        addtotable(bg_pid, line);
                     } 
+                    
                 }
             }
         }
@@ -374,6 +410,11 @@ int main() {
             for (unsigned int i = 0; i < procs.size(); i++){ 
                 waitpid(pid, &status, WUNTRACED); 
                 if (WIFSTOPPED(status)){
+                    if (tcsetpgrp(STDIN_FILENO, getpgrp()) < 0){
+                        perror("tcsetpgrp");
+                        exit(EXIT_FAILURE); 
+                    }
+
                     handle_stop(pid, line); 
                 }
             }
@@ -396,6 +437,11 @@ int main() {
             perror("close");
         
         prompt = get_prompt();
+        
+        if (tcsetpgrp(STDIN_FILENO, getpgrp()) < 0){
+            perror("tcsetpgrp");
+            exit(EXIT_FAILURE); 
+        }
     }
 
     printf("\n");
