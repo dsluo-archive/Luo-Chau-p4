@@ -214,8 +214,19 @@ int main() {
                 printf(HELP_MESSAGE);
 
             } else if (strcmp(argv[0], "bg") == 0) {    // TODO: need to write bg [jid]
-                 
-            } else if (strcmp(argv[0], "fg") == 0) {    // TODO: doesn't work for sigstppd processes
+                procs.clear(); 
+                pid_t ret_pgid = atoi(argv[1]);       
+                
+                update_status(ret_pgid, "running");
+                
+                //waitpid(ret_pgid, &status, 0);
+                
+                // give terminal control back to the foreground process group
+                if (tcsetpgrp(STDIN_FILENO, getpgrp()) < 0){
+                    perror("tcsetpgrp");
+                    exit(EXIT_FAILURE); 
+                }
+            } else if (strcmp(argv[0], "fg") == 0) {    
                 procs.clear(); 
                 pid_t ret_pgid = atoi(argv[1]);       
                 
@@ -228,6 +239,8 @@ int main() {
                 if (kill(ret_pgid, SIGCONT) < 0){
                     perror("kill");
                 }
+
+                update_status(ret_pgid, "continued");
                 
                 waitpid(ret_pgid, &status, 0);
                 
@@ -244,7 +257,7 @@ int main() {
                         printf("[%d] %s\t%s\n", val.pgid, val.status.c_str(), val.cmd.c_str()); 
                     }
                 }
-            } else if (strcmp(argv[0], "export") == 0){ // TODO: export environmental variables
+            } else if (strcmp(argv[0], "export") == 0){ 
                 export_env(size, argv);
             } else if (strcmp(argv[0], "kill") == 0) { 
                 procs.clear(); 
@@ -308,32 +321,14 @@ int main() {
                     signal(SIGTTOU, SIG_DFL); 
                     signal(SIGTSTP, SIG_DFL); 
                     signal(SIGINT, handle_kill); // kill process, burn it with fire
-                    //signal(SIGTSTP, handle_stop); // suspend process, stop it from running
-                                                  // note fg should handle suspended processes the same way as background ones.
-                                                  // e.g if I suspend a process, I can continue it by using fg.
-                                                  //     if I background a process, I can foreground it by using fg.
-                                                  // both should do the same thing, but handling will be a little different.
-           
             
                     // if not the first command 
                     if (i != 0){ 
-                        /* if (bg){ */
-                        /*     /1* if (setpgid(0, bg_pid) == -1){ *1/ */
-                        /*     /1*     perror("setpgid"); *1/ */ 
-                        /*     /1* } *1/ */  
-                        /* } */
-
                         if (dup2(pipefds.at(i - 1)[0], STDIN_FILENO) == -1){
                             perror("dup2");
                             exit(EXIT_FAILURE); 
                         }
                     } else {
-                        /* if (bg){ */
-                        /*     /1* if (setpgid(0, 0) == -1){ *1/ */
-                        /*     /1*     perror("setpgid"); *1/ */ 
-                        /*     /1* } *1/ */ 
-                        /* } */
-                        
                         if (setpgid(0, 0) == -1){
                             perror("setpgid"); 
                         } 
