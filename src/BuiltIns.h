@@ -14,4 +14,5 @@ void addtojobtable(pid_t jid);
 
 int kill(int argc, char **argv);
 
+int export_env(int argc, char **argv);
 #endif

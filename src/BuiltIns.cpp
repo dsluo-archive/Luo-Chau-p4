@@ -4,6 +4,7 @@
 #include <sys/wait.h>
 #include <sys/types.h>
 #include <fcntl.h>
+#include <string.h>
 
 #include "BuiltIns.h"
 
@@ -82,3 +83,22 @@ int kill(int argc, char **argv) {
     return kill(pid, signal);
 }
 
+int export_env(int argc, char** argv) {
+    if (argc < 2) {
+        perror(argv[0]);
+        return EXIT_FAILURE;
+    }
+    const char * name = strtok(argv[1], "=");
+    const char * word = strtok(NULL, "=");
+    if (name == nullptr || word == nullptr) {
+        printf("Usage: export NAME[=WORD]");
+        return EXIT_FAILURE;
+    }
+    if (setenv(name, word, 1) == -1) {
+        perror(argv[0]);
+        return EXIT_FAILURE;
+    }
+
+    return EXIT_SUCCESS;
+
+}
