@@ -13,6 +13,8 @@
 #include <signal.h>
 #include <map>
 #include <stdexcept>
+#include <readline/readline.h>
+#include <readline/history.h>
 
 #include "BuiltIns.h"
 
@@ -27,7 +29,7 @@ typedef struct job_entry {
 static vector<job_entry> jobtable;
 
 vector<string> tokenize(string str);
-void printprompt();
+char * get_prompt();
 void close_pipe(int pipefd[2]);
 void addtotable(pid_t pgid, string cmd);
 
@@ -63,9 +65,13 @@ int main() {
     if (dfl_out == -1) { perror("dup"); exit(EXIT_FAILURE); }
     int dfl_err = dup(STDERR_FILENO);
     if (dfl_err == -1) { perror("dup"); exit(EXIT_FAILURE); }
+    char * line_read;
 
-    printprompt();
-    while (getline(cin, line)) {
+    const char * prompt = get_prompt();
+    while ((line_read = readline(prompt))) {
+        line = string(line_read);
+        free(line_read);
+        delete [] prompt;
         string in = "";
         string out = "";
         string err = "";
@@ -321,7 +327,7 @@ int main() {
         if (errfd != STDERR_FILENO && close(errfd) != 0)
             perror("close");
         
-        printprompt();
+        prompt = get_prompt();
     }
 
     printf("\n");
@@ -397,7 +403,8 @@ int kill(int argc, char **argv) {
     return kill(pid, signal);
 }
 
-void printprompt(){
+char * get_prompt(){
+    char * prompt;
     // Figure out what the current working directory is. 
     long maxlen = pathconf(".", _PC_PATH_MAX);
     char *buf = nullptr;
@@ -412,13 +419,16 @@ void printprompt(){
         perror("getenv");     
 
     // Check the current working directory versus the home directory.
-    printf("1730sh: ");
     if (strlen(p) >= strlen(homedir)){
         char *rpath = p + strlen(homedir);
-        printf("~%s$ ", rpath);   
+        prompt = new char[strlen(rpath) + strlen("1730sh: $ ")];
+        sprintf(prompt, "1730sh: ~%s$ ", rpath);   
     } else {
-        printf("%s$ ", p); 
+        prompt = new char[strlen(p) + strlen("1730sh: $ ")];
+        sprintf(prompt, "1730sh: %s$ ", p); 
     }
+
+    return prompt;
 }
 
 vector<string> tokenize(string str) {

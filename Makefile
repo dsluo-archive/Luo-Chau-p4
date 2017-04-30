@@ -1,6 +1,7 @@
 GCC = g++
-LFLAGS = -Wall -g
-CFLAGS = -Wall -std=c++14 -g -O0 -pedantic-errors
+RLFLAGS = -lreadline
+LFLAGS = -Wall -g $(RLFLAGS)
+CFLAGS = -Wall -std=c++14 -g -O0 -pedantic-errors $(RLFLAGS)
 
 TARGET = 1730sh
 SRCDIR = ./src
