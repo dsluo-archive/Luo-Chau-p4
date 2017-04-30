@@ -33,8 +33,6 @@ char * get_prompt();
 void close_pipe(int pipefd[2]);
 void addtotable(pid_t pgid, string cmd);
 
-int kill(int argc, char **argv);
-
 void handle_stop(pid_t pgid, string cmd); // ctrl-z
 void handle_kill(int signum); // ctrl-c
 
@@ -54,11 +52,14 @@ int main() {
         "                       If no signal is specified, the SIGTERM signal is sent.\n";
     string line;
     int *last_wstatus = nullptr;
+    int status;
     
     signal(SIGINT, SIG_IGN);
     signal(SIGTSTP, SIG_IGN);
+    signal(SIGTTIN, SIG_IGN);
+    signal(SIGTTOU, SIG_IGN);
     signal(SIGCHLD, handle_bg);
-
+    
     int dfl_in = dup(STDIN_FILENO);
     if (dfl_in == -1) { perror("dup"); exit(EXIT_FAILURE); }
     int dfl_out = dup(STDOUT_FILENO);
@@ -66,6 +67,18 @@ int main() {
     int dfl_err = dup(STDERR_FILENO);
     if (dfl_err == -1) { perror("dup"); exit(EXIT_FAILURE); }
     char * line_read;
+
+    // Make the shell its own process leader
+    if (setpgid(getpid(), getpid()) < 0){
+        perror("setpgid");
+        exit(EXIT_FAILURE); 
+    }
+    
+    // get terminal control from the shell that started this shell
+    if (tcsetpgrp(STDIN_FILENO, getpgrp()) < 0){
+        perror("tcsetpgrp");
+        exit(EXIT_FAILURE); 
+    }
 
     const char * prompt = get_prompt();
     while ((line_read = readline(prompt))) {
@@ -86,28 +99,47 @@ int main() {
         bool bg = false;
 
         vector<string> tokens = tokenize(line);
-        vector<vector<string>> procs;
+        vector<vector<string>> procs; // TODO: Fix spacing splitting thing
         vector<string> proc;
-
+        
+        // Reap children, pick up background process updates, etc. 
+        pid_t chld_pid; 
+        while ((chld_pid = waitpid(-1, &status, WNOHANG | WUNTRACED)) > 0){
+            // print status info out of handler. save this data in a global structure of sorts 
+            if (WIFEXITED(status)){
+                // update pid status
+                update_status(chld_pid, "exited"); 
+            } else if (WIFSTOPPED(status)){
+                // update pid status
+                update_status(chld_pid, "stopped"); 
+            } else if (WIFSIGNALED(status)){
+                // update pid status
+                update_status(chld_pid, "killed"); 
+            } else {
+                perror("waitpid");
+            }
+        }
+        
+        // TODO: Need to handle output and input redirection anywhere. 
         for (auto it = tokens.begin(); it != tokens.end(); it++) {
             if ((it + 1) != tokens.end()) {
-                if (*it == "e>") {
+                if (*it == "e>") { // TODO: Handling error redirection
                     err_append = false;
                     err = *(it + 1);
                     it++;
-                } else if (*it == "e>>") {
+                } else if (*it == "e>>") { // TODO: Handling error redirection
                     err_append = true;
                     err = *(it + 1);
                     it++;
-                } else if (*it == ">") {
+                } else if (*it == ">") { // TODO: Handling output redirection
                     out_append = false;
                     out = *(it + 1);
                     it++;
-                } else if (*it == ">>") {
+                } else if (*it == ">>") { // TODO: Handling output redirection
                     out_append = true;
                     out = *(it + 1);
                     it++;
-                } else if (*it == "<") {
+                } else if (*it == "<") { // TODO: Handling input redirection
                     in = *(it + 1);
                     it++;
                 } else if (*it == "|") {
@@ -134,6 +166,7 @@ int main() {
         pid_t pid;
         pid_t bg_pid = 0;
         vector<array<int, 2>> pipefds;
+        vector<pid_t> pids;
         
         // for each process in procs,
         for (size_t i = 0; i < procs.size(); i++) {
@@ -158,8 +191,10 @@ int main() {
             argv[size] = nullptr;
 
             if (strcmp(argv[0], "cd") == 0) {
+                procs.clear(); // Don't know if this is good to do or not, but it solves the hanging after waiting after a background process
                 cd(argv[1]);
             } else if (strcmp(argv[0], "exit") == 0) {
+                procs.clear(); 
                 if (argv[1] != nullptr) {
                     exit(atoi(argv[1])); 
                 } else {
@@ -174,21 +209,48 @@ int main() {
                     exit(exit_status);
                 }
             } else if (strcmp(argv[0], "help") == 0) {
+                procs.clear(); 
                 printf(HELP_MESSAGE);
-            } else if (strcmp(argv[0], "fg") == 0) {    // TODO: Write foreground cmd
-                  
-            
-            } else if (strcmp(argv[0], "jobs") == 0) {  // TODO: Write jobs cmd
-                for (auto val : jobtable){
-                    printf("[%d] %s %s\n", val.pgid, val.cmd.c_str(), val.status.c_str()); 
+
+            } else if (strcmp(argv[0], "bg") == 0) {    // TODO: need to write bg [jid]
+                 
+            } else if (strcmp(argv[0], "fg") == 0) {    // TODO: doesn't work for sigstppd processes
+                procs.clear(); 
+                pid_t ret_pgid = atoi(argv[1]);       
+                
+                // give terminal control to the background process group
+                if (tcsetpgrp(STDIN_FILENO, ret_pgid) < 0){
+                    perror("tcsetpgrp");
+                    exit(EXIT_FAILURE); 
                 }
-            } else if (strcmp(argv[0], "kill") == 0) {  // TODO: Write kill cmd
+                
+                // continue stopped processes
+                if (kill(ret_pgid, SIGCONT) < 0){
+                    perror("kill");
+                }
+                
+                waitpid(ret_pgid, &status, 0);
+                
+                // give terminal control back to the foreground process group
+                if (tcsetpgrp(STDIN_FILENO, getpgrp()) < 0){
+                    perror("tcsetpgrp");
+                    exit(EXIT_FAILURE); 
+                }
+            } else if (strcmp(argv[0], "jobs") == 0) { 
+                procs.clear(); 
+                if (!jobtable.empty()){
+                    printf("JID\tSTAT\tCOMMAND\n"); 
+                    for (auto val : jobtable){
+                        printf("[%d] %s\t%s\n", val.pgid, val.status.c_str(), val.cmd.c_str()); 
+                    }
+                }
+            } else if (strcmp(argv[0], "export") == 0){ // TODO: export environmental variables
+            
+            } else if (strcmp(argv[0], "kill") == 0) { 
+                procs.clear(); 
                 if (kill(size, argv) == -1)
                     perror("kill");
             } else {
-                // TODO: Put into function, replace to make this look nicer. 
-                // TODO: If argv[0] is "bg", then need to remove it from vector.
-             
                 if (i == 0){
                     if (in != "") {
                         if ((infd = open(in.c_str(), O_RDONLY)) == -1){
@@ -197,7 +259,6 @@ int main() {
                         }
                     }
                 }
-
 
                 if (i == procs.size() - 1){
                     if (out != "") {
@@ -217,24 +278,23 @@ int main() {
                 }
 
                 pid = fork(); 
-                if (bg && (i == 0)){
-                    bg_pid = pid; 
-                    addtotable(bg_pid, line); 
-                }
-
                 if (pid == 0){
-                    signal(SIGTSTP, SIG_DFL);
+                    signal(SIGTTIN, SIG_DFL); 
+                    signal(SIGTTOU, SIG_DFL); 
+                    signal(SIGTSTP, SIG_DFL); 
                     signal(SIGINT, handle_kill); // kill process, burn it with fire
                     //signal(SIGTSTP, handle_stop); // suspend process, stop it from running
                                                   // note fg should handle suspended processes the same way as background ones.
                                                   // e.g if I suspend a process, I can continue it by using fg.
                                                   //     if I background a process, I can foreground it by using fg.
                                                   // both should do the same thing, but handling will be a little different.
-                    
+            
                     // if not the first command 
                     if (i != 0){ 
                         if (bg){
-                            setpgid(0, bg_pid);  
+                            if (setpgid(0, bg_pid) == -1){
+                                perror("setpgid"); 
+                            }  
                         }
                          
                         if (dup2(pipefds.at(i - 1)[0], STDIN_FILENO) == -1){
@@ -243,9 +303,11 @@ int main() {
                         }
                     } else {
                         if (bg){
-                            setpgid(0, 0); 
+                            if (setpgid(0, 0) == -1){
+                                perror("setpgid"); 
+                            } 
                         }
-                   
+
                         if (dup2(infd, STDIN_FILENO) == -1) {
                             perror("dup2");
                             exit(EXIT_FAILURE);
@@ -264,7 +326,7 @@ int main() {
                             exit(EXIT_FAILURE);
                         }
                         
-                        if (dup2(errfd, STDERR_FILENO) == -1) {
+                        if (dup2(errfd, STDERR_FILENO) == -1){ 
                             perror("dup2");
                             exit(EXIT_FAILURE);
                         }
@@ -274,7 +336,7 @@ int main() {
                     for (unsigned int i = 0; i < pipefds.size(); i++){
                         close_pipe(pipefds.at(i).data()); 
                     }
-                
+                    
                     // populate arguments with argv
                     int status = execvp(procs[i][0].c_str(), argv);
                     delete[] argv;
@@ -290,27 +352,33 @@ int main() {
                 } else if (pid < 0){
                     perror("fork"); 
                     exit(EXIT_FAILURE);
-                } 
+                } else {
+                    if (bg && (i == 0)){
+                        if (setpgid(pid, pid) == -1){
+                            perror("setpgid"); 
+                        }
 
+                        bg_pid = pid; 
+                        addtotable(bg_pid, line); 
+                    } 
+                }
             }
-
         }
 
         // close all pipes when done
         for (unsigned int i = 0; i < pipefds.size(); i++){
             close_pipe(pipefds.at(i).data()); 
         }
-        
-        if (!bg){ 
-            int status;
-            for (unsigned int i = 0; i < procs.size(); i++){
+
+        if (!bg){  
+            for (unsigned int i = 0; i < procs.size(); i++){ 
                 waitpid(pid, &status, WUNTRACED); 
-                if (WIFSTOPPED(status)) 
-                    handle_stop(pid, line);
+                if (WIFSTOPPED(status)){
+                    handle_stop(pid, line); 
+                }
             }
-            
-            last_wstatus = &status;
         }
+        last_wstatus = &status;
         
         // Restore file descriptors 
         if (dup2(STDIN_FILENO, dfl_in) == -1)
@@ -332,75 +400,6 @@ int main() {
 
     printf("\n");
     return EXIT_SUCCESS;
-}
-
-int kill(int argc, char **argv) {
-    map<string, int> signal_map = {
-        {"SIGHUP",    SIGHUP},
-        {"SIGINT",    SIGINT},
-        {"SIGQUIT",   SIGQUIT},
-        {"SIGILL",    SIGILL},
-        {"SIGABRT",   SIGABRT},
-        {"SIGFPE",    SIGFPE},
-        {"SIGKILL",   SIGKILL},
-        {"SIGSEGV",   SIGSEGV},
-        {"SIGPIPE",   SIGPIPE},
-        {"SIGALRM",   SIGALRM},
-        {"SIGTERM",   SIGTERM},
-        {"SIGUSR1",   SIGUSR1},
-        {"SIGUSR2",   SIGUSR2},
-        {"SIGCHLD",   SIGCHLD},
-        {"SIGCONT",   SIGCONT},
-        {"SIGSTOP",   SIGSTOP},
-        {"SIGTSTP",   SIGTSTP},
-        {"SIGTTIN",   SIGTTIN},
-        {"SIGTTOU",   SIGTTOU}, 
-        {"SIGBUS",    SIGBUS},
-        {"SIGPOLL",   SIGPOLL},
-        {"SIGPROF",   SIGPROF},
-        {"SIGSYS",    SIGSYS},
-        {"SIGTRAP",   SIGTRAP},
-        {"SIGURG",    SIGURG},
-        {"SIGVTALRM", SIGVTALRM},
-        {"SIGXCPU",   SIGXCPU},
-        {"SIGXFSZ",   SIGXFSZ},
-        {"SIGIOT",    SIGIOT},
-        // {"SIGEMT",    SIGEMT},
-        {"SIGSTKFLT", SIGSTKFLT},
-        {"SIGIO",     SIGIO},
-        {"SIGCLD",    SIGCLD},
-        {"SIGPWR",    SIGPWR},
-        // {"SIGINFO",   SIGINFO},
-        // {"SIGLOST",   SIGLOST},
-        {"SIGWINCH",  SIGWINCH},
-        {"SIGUNUSED", SIGUNUSED}
-    };
-
-    int signal = -1;
-    pid_t pid;
-
-    char opt;
-    while((opt = getopt(argc, argv, "s:")) != -1) {
-        switch (opt) {
-            case 's':
-                try {
-                    signal = stoi(optarg);
-                } catch (invalid_argument) {
-                    signal = signal_map[string(optarg)];
-                }
-                break;
-        }
-    }
-    
-    if (signal == -1)
-        signal = SIGTERM;
-    // for (int i = optind; i < argc; i++) {
-    //     
-    // }
-
-    pid = stoul(argv[optind]);
-
-    return kill(pid, signal);
 }
 
 char * get_prompt(){
@@ -488,7 +487,7 @@ void handle_bg(int signum){
     pid_t chld_pid;
     int status;
 
-    while ((chld_pid = waitpid(-1, &status, WNOHANG)) > 0){
+    while ((chld_pid = waitpid(-1, &status, WNOHANG | WUNTRACED)) > 0){
         // print status info out of handler. save this data in a global structure of sorts 
         if (WIFEXITED(status)){
             // update pid status
@@ -503,13 +502,22 @@ void handle_bg(int signum){
             perror("waitpid");
         }
     }
+
 }
 
 void handle_stop(pid_t pgid, string cmd){
-    addtotable(pgid, cmd); // need pid, command, and size of the command for char** iteration 
-    update_status(pgid, "stopped");
+    if (jobtable.empty()){
+        addtotable(pgid, cmd); 
+    } else {
+        for (auto entry : jobtable){ // really just a hacked solution. You'll understand if you read the code. 
+            if (entry.pgid == pgid)
+                break;
+            else
+                addtotable(pgid, cmd); 
+        }
+    }
 
-    //printf("\n[%d] stopped", pid);
+    update_status(pgid, "stopped");
 }
 
 void handle_kill(int signum){
@@ -525,7 +533,7 @@ void update_status(pid_t pgid, string status){
             continue; 
         } else {
             job.status = status; 
-            printf("[%d] %s\n", job.pgid, job.status.c_str());
+            printf("UPDATE: [%d] %s %s\n", job.pgid, job.cmd.c_str(), job.status.c_str());
         }
     }
 }
@@ -534,8 +542,10 @@ void addtotable(pid_t pgid, string cmd){
     job_entry job; 
     
     job.pgid = pgid;
-    job.cmd = cmd.c_str();
+    job.cmd = cmd;
     job.status = "running";
 
     jobtable.push_back(job);     
+    
+    printf("\nADD: [%d] %s %s\n", job.pgid, job.cmd.c_str(), job.status.c_str());
 }
