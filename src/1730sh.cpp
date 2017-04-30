@@ -83,6 +83,7 @@ int main() {
     const char * prompt = get_prompt();
     while ((line_read = readline(prompt))) {
         line = string(line_read);
+        add_history(line_read);
         free(line_read);
         delete [] prompt;
 
