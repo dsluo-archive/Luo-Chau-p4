@@ -245,7 +245,7 @@ int main() {
                     }
                 }
             } else if (strcmp(argv[0], "export") == 0){ // TODO: export environmental variables
-            
+                export_env(size, argv);
             } else if (strcmp(argv[0], "kill") == 0) { 
                 procs.clear(); 
                 if (kill(size, argv) == -1)
