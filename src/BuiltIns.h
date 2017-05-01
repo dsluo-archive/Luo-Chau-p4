@@ -7,7 +7,7 @@
 
 using namespace std;
 
-int cd(const char * path);
+int cd(int argc, char **argv);
 
 void jobs();
 void addtojobtable(pid_t jid);

@@ -193,10 +193,8 @@ int main() {
             argv[size] = nullptr;
 
             if (strcmp(argv[0], "cd") == 0) {
-                procs.clear(); // Don't know if this is good to do or not, but it solves the hanging after waiting after a background process
-                cd(argv[1]);
+                cd(size, argv);
             } else if (strcmp(argv[0], "exit") == 0) {
-                procs.clear(); 
                 if (argv[1] != nullptr) {
                     exit(atoi(argv[1])); 
                 } else {
@@ -211,11 +209,9 @@ int main() {
                     exit(exit_status);
                 }
             } else if (strcmp(argv[0], "help") == 0) {
-                procs.clear(); 
                 printf(HELP_MESSAGE);
 
             } else if (strcmp(argv[0], "bg") == 0) {    // TODO: need to write bg [jid]
-                procs.clear(); 
                 pid_t ret_pgid = atoi(argv[1]);       
                 
                 update_status(ret_pgid, "running");
@@ -228,7 +224,6 @@ int main() {
                     exit(EXIT_FAILURE); 
                 }
             } else if (strcmp(argv[0], "fg") == 0) {    
-                procs.clear(); 
                 pid_t ret_pgid = atoi(argv[1]);       
                 
                 // give terminal control to the background process group
@@ -251,7 +246,6 @@ int main() {
                     exit(EXIT_FAILURE); 
                 }
             } else if (strcmp(argv[0], "jobs") == 0) { 
-                procs.clear(); 
                 if (!jobtable.empty()){
                     printf("JID\tSTAT\tCOMMAND\n"); 
                     for (auto val : jobtable){
@@ -261,7 +255,6 @@ int main() {
             } else if (strcmp(argv[0], "export") == 0){ 
                 export_env(size, argv);
             } else if (strcmp(argv[0], "kill") == 0) { 
-                //procs.clear(); 
                 kill_cmd(size, argv);
             } else {
                 if (i == 0){

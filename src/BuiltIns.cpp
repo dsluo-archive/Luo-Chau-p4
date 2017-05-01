@@ -8,7 +8,10 @@
 
 #include "BuiltIns.h"
 
-int cd(const char * path) {
+int cd(int argc, char **argv) {
+    const char * path = argv[1];
+    if (path == NULL)
+        path = getenv("HOME");
     int status = chdir(path);
     if (status == -1) {
         perror("cd");
@@ -18,6 +21,10 @@ int cd(const char * path) {
 }
 
 int kill_cmd(int argc, char **argv) {
+    if (argc < 2) {
+        fprintf(stderr, "Usage: %s [-s SIGNAL] PID", argv[0]);
+        return EXIT_FAILURE;
+    }
     map<string, int> signal_map = {
         {"SIGHUP",    SIGHUP},
         {"SIGINT",    SIGINT},
