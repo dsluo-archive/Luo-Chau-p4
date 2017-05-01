@@ -17,7 +17,7 @@ int cd(const char * path) {
     return status;
 }
 
-int kill(int argc, char **argv) {
+int kill_cmd(int argc, char **argv) {
     map<string, int> signal_map = {
         {"SIGHUP",    SIGHUP},
         {"SIGINT",    SIGINT},
@@ -77,10 +77,19 @@ int kill(int argc, char **argv) {
     
     if (signal == -1)
         signal = SIGTERM;
-    
-    pid = stoul(argv[optind]);
+    try {
+        pid = stoul(argv[optind]);
+    } catch (invalid_argument) {
+        fprintf(stderr, "Invalid argument: %s\n", argv[optind]);
+        return EXIT_FAILURE;
+    }
 
-    return kill(pid, signal);
+    if (kill(pid, signal) == -1) {
+        perror("kill");
+        return EXIT_FAILURE;
+    } else {
+        return EXIT_SUCCESS;
+    }
 }
 
 int export_env(int argc, char** argv) {

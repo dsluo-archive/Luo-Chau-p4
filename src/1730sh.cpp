@@ -261,9 +261,8 @@ int main() {
             } else if (strcmp(argv[0], "export") == 0){ 
                 export_env(size, argv);
             } else if (strcmp(argv[0], "kill") == 0) { 
-                procs.clear(); 
-                if (kill(size, argv) == -1)
-                    perror("kill");
+                //procs.clear(); 
+                kill_cmd(size, argv);
             } else {
                 if (i == 0){
                     if (in != "") {
@@ -563,6 +562,8 @@ void handle_stop(pid_t pgid, string cmd){
 }
 
 void handle_kill(int signum){
+    update_status(getpid(), "terminated");
+
     // send the kill signal (SIGKILL) to the pid (only the child should be calling this)
     kill(getpid(), SIGKILL);
 }
