@@ -262,6 +262,7 @@ int main() {
                     exit(EXIT_FAILURE); 
                 }
             } else if (strcmp(argv[0], "jobs") == 0) { 
+                procs.clear();
                 if (!jobtable.empty()){
                     printf("JID\tSTAT\tCOMMAND\n"); 
                     for (auto val : jobtable){
