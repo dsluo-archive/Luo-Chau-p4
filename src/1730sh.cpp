@@ -80,12 +80,13 @@ int main() {
         exit(EXIT_FAILURE); 
     }
 
-    const char * prompt = get_prompt();
+    char * prompt = get_prompt();
     while ((line_read = readline(prompt))) {
         line = string(line_read);
         add_history(line_read);
         free(line_read);
-        delete [] prompt;
+        //free(prompt);
+        delete prompt;
 
         string in = "";
         string out = "";
@@ -456,26 +457,34 @@ char * get_prompt(){
     char * prompt;
     // Figure out what the current working directory is. 
     long maxlen = pathconf(".", _PC_PATH_MAX);
-    char *buf = nullptr;
-    char *p; 
-    if ((p = getcwd(buf, maxlen)) == NULL)
+    char * cwd = nullptr; 
+    if ((cwd = getcwd(cwd, (size_t) maxlen)) == NULL) {
         perror("getcwd");
+        free(cwd);
+        return NULL;
+    }
 
     // If the user is above their home directory, use a tilde.
     // If not, print the absolute path instead.
     const char *homedir = getenv("HOME");
-    if (homedir == NULL)
-        perror("getenv");     
+    if (homedir == NULL) {
+        perror("getenv"); 
+        return NULL;
+    }
 
     // Check the current working directory versus the home directory.
-    if (strlen(p) >= strlen(homedir)){
-        char *rpath = p + strlen(homedir);
+    if (strncmp(cwd, homedir, strlen(homedir)) == 0){
+        char *rpath = cwd + strlen(homedir);
+        //prompt = (char *) calloc(strlen(rpath) + strlen("1730sh: $ ") + 1, sizeof(char));
         prompt = new char[strlen(rpath) + strlen("1730sh: $ ")];
         sprintf(prompt, "1730sh: ~%s$ ", rpath);   
     } else {
-        prompt = new char[strlen(p) + strlen("1730sh: $ ")];
-        sprintf(prompt, "1730sh: %s$ ", p); 
+        //prompt = (char *) calloc(strlen(cwd) + strlen("1730sh: $ ") + 1, sizeof(char));
+        prompt = new char[strlen(cwd) + strlen("1730sh: $ ")];
+        sprintf(prompt, "1730sh: %s$ ", cwd); 
     }
+
+    free(cwd);
 
     return prompt;
 }
