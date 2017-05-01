@@ -195,19 +195,24 @@ int main() {
             if (strcmp(argv[0], "cd") == 0) {
                 cd_cmd(size, argv);
             } else if (strcmp(argv[0], "exit") == 0) {
+                // cannot be in separate function because of last exit
+                // status behavior
+                int exit_status;
                 if (argv[1] != nullptr) {
-                    exit(atoi(argv[1])); 
+                    try {
+                        exit_status = stoi(argv[1]);
+                    } catch (invalid_argument) {
+                        fprintf(stderr, "Usage: %s [EXIT CODE]", argv[0]);
+                    }
                 } else {
-                    int exit_status;
                     if (last_wstatus != nullptr)
                         exit_status = WIFEXITED(*last_wstatus) 
                             ? WEXITSTATUS(*last_wstatus)
                             : EXIT_FAILURE;
                     else
                         exit_status = EXIT_SUCCESS;
-
-                    exit(exit_status);
                 }
+                    exit(exit_status); 
             } else if (strcmp(argv[0], "help") == 0) {
                 printf(HELP_MESSAGE);
 
