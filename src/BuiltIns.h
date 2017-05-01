@@ -7,12 +7,12 @@
 
 using namespace std;
 
-int cd(int argc, char **argv);
+int cd_cmd(int argc, char **argv);
 
 void jobs();
 void addtojobtable(pid_t jid);
 
 int kill_cmd(int argc, char **argv);
 
-int export_env(int argc, char **argv);
+int export_cmd(int argc, char **argv);
 #endif

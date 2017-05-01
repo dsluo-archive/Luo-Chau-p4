@@ -8,7 +8,7 @@
 
 #include "BuiltIns.h"
 
-int cd(int argc, char **argv) {
+int cd_cmd(int argc, char **argv) {
     const char * path = argv[1];
     if (path == NULL)
         path = getenv("HOME");
@@ -99,7 +99,7 @@ int kill_cmd(int argc, char **argv) {
     }
 }
 
-int export_env(int argc, char** argv) {
+int export_cmd(int argc, char** argv) {
     if (argc < 2) {
         perror(argv[0]);
         return EXIT_FAILURE;

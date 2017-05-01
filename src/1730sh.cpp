@@ -193,7 +193,7 @@ int main() {
             argv[size] = nullptr;
 
             if (strcmp(argv[0], "cd") == 0) {
-                cd(size, argv);
+                cd_cmd(size, argv);
             } else if (strcmp(argv[0], "exit") == 0) {
                 if (argv[1] != nullptr) {
                     exit(atoi(argv[1])); 
@@ -253,7 +253,7 @@ int main() {
                     }
                 }
             } else if (strcmp(argv[0], "export") == 0){ 
-                export_env(size, argv);
+                export_cmd(size, argv);
             } else if (strcmp(argv[0], "kill") == 0) { 
                 kill_cmd(size, argv);
             } else {
