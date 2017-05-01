@@ -203,6 +203,7 @@ int main() {
                         exit_status = stoi(argv[1]);
                     } catch (invalid_argument) {
                         fprintf(stderr, "Usage: %s [EXIT CODE]", argv[0]);
+                        continue;
                     }
                 } else {
                     if (last_wstatus != nullptr)
@@ -212,13 +213,17 @@ int main() {
                     else
                         exit_status = EXIT_SUCCESS;
                 }
-                    exit(exit_status); 
+                exit(exit_status); 
             } else if (strcmp(argv[0], "help") == 0) {
                 printf(HELP_MESSAGE);
-
             } else if (strcmp(argv[0], "bg") == 0) {    // TODO: need to write bg [jid]
-                pid_t ret_pgid = atoi(argv[1]);       
-                
+                pid_t ret_pgid;
+                try {
+                    ret_pgid = stoul(argv[1]);
+                } catch (invalid_argument) {
+                    fprintf(stderr, "Usage: %s [PID]", argv[0]);
+                    continue;
+                }
                 update_status(ret_pgid, "running");
                 
                 //waitpid(ret_pgid, &status, 0);
@@ -229,7 +234,13 @@ int main() {
                     exit(EXIT_FAILURE); 
                 }
             } else if (strcmp(argv[0], "fg") == 0) {    
-                pid_t ret_pgid = atoi(argv[1]);       
+                pid_t ret_pgid;
+                try {
+                    ret_pgid = stoul(argv[1]);
+                } catch (invalid_argument) {
+                    fprintf(stderr, "Usage: %s [PID]", argv[0]);
+                    continue;
+                }
                 
                 // give terminal control to the background process group
                 if (tcsetpgrp(STDIN_FILENO, ret_pgid) < 0){
