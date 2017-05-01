@@ -330,7 +330,7 @@ int main() {
                     signal(SIGTTOU, SIG_DFL); 
                     signal(SIGTSTP, SIG_DFL); 
                     signal(SIGINT, handle_kill); // kill process, burn it with fire
-            
+
                     // if not the first command 
                     if (i != 0){ 
                         if (dup2(pipefds.at(i - 1)[0], STDIN_FILENO) == -1){
