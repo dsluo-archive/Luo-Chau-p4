@@ -122,26 +122,25 @@ int main() {
             }
         }
         
-        // TODO: Need to handle output and input redirection anywhere. 
         for (auto it = tokens.begin(); it != tokens.end(); it++) {
             if ((it + 1) != tokens.end()) {
-                if (*it == "e>") { // TODO: Handling error redirection
+                if (*it == "e>") {
                     err_append = false;
                     err = *(it + 1);
                     it++;
-                } else if (*it == "e>>") { // TODO: Handling error redirection
+                } else if (*it == "e>>") {
                     err_append = true;
                     err = *(it + 1);
                     it++;
-                } else if (*it == ">") { // TODO: Handling output redirection
+                } else if (*it == ">") {
                     out_append = false;
                     out = *(it + 1);
                     it++;
-                } else if (*it == ">>") { // TODO: Handling output redirection
+                } else if (*it == ">>") {
                     out_append = true;
                     out = *(it + 1);
                     it++;
-                } else if (*it == "<") { // TODO: Handling input redirection
+                } else if (*it == "<") {
                     in = *(it + 1);
                     it++;
                 } else if (*it == "|") {
@@ -216,7 +215,7 @@ int main() {
                 exit(exit_status); 
             } else if (strcmp(argv[0], "help") == 0) {
                 printf(HELP_MESSAGE);
-            } else if (strcmp(argv[0], "bg") == 0) {    // TODO: need to write bg [jid]
+            } else if (strcmp(argv[0], "bg") == 0) {
                 pid_t ret_pgid;
                 try {
                     ret_pgid = stoul(argv[1]);
