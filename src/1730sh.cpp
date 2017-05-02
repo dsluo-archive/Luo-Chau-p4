@@ -39,17 +39,18 @@ void handle_kill(int signum); // ctrl-c
 void handle_bg(int signum);
 void update_status(pid_t pgid, string status);
 
+const char *HELP_MESSAGE =
+    "bg JID               – Resume the stopped job JID in the background, as if it had been started with &.\n"
+    "cd [PATH]            – Change the current directory to PATH. The environmental variable HOME is the default PATH.\n"
+    "exit [N]             – Cause the shell to exit with a status of N. If N is omitted, the exit status is that of the last job executed.\n"
+    "export NAME[=WORD]   – NAME is automatically included in the environment of subsequently executed jobs.\n" 
+    "fg JID               – Resume job JID in the foreground, and make it the current job.\n"
+    "help                 – Display this help message.\n"
+    "jobs                 – List current jobs.\n"
+    "kill [-s SIGNAL] PID – The kill utility sends the specified signal to the specified process or process group PID\n"
+    "                       If no signal is specified, the SIGTERM signal is sent.\n";
+
 int main() {
-    const char *HELP_MESSAGE =
-        "bg JID               – Resume the stopped job JID in the background, as if it had been started with &.\n"
-        "cd [PATH]            – Change the current directory to PATH. The environmental variable HOME is the default PATH.\n"
-        "exit [N]             – Cause the shell to exit with a status of N. If N is omitted, the exit status is that of the last job executed.\n"
-        "export NAME[=WORD]   – NAME is automatically included in the environment of subsequently executed jobs.\n" 
-        "fg JID               – Resume job JID in the foreground, and make it the current job.\n"
-        "help                 – Display this help message.\n"
-        "jobs                 – List current jobs.\n"
-        "kill [-s SIGNAL] PID – The kill utility sends the specified signal to the specified process or process group PID\n"
-        "                       If no signal is specified, the SIGTERM signal is sent.\n";
     string line;
     int *last_wstatus = nullptr;
     int status;
@@ -254,6 +255,23 @@ int main() {
                 update_status(ret_pgid, "continued");
                 
                 waitpid(ret_pgid, &status, 0);
+                if (WIFEXITED(status)){
+                    // update pid status
+                    update_status(ret_pgid, "exited"); 
+                } else if (WIFSTOPPED(status)){
+                    if (tcsetpgrp(STDIN_FILENO, getpgrp()) < 0){
+                        perror("tcsetpgrp");
+                        exit(EXIT_FAILURE); 
+                    }
+                    handle_stop(ret_pgid, line); 
+                    // update pid status
+                    update_status(ret_pgid, "stopped"); 
+                } else if (WIFSIGNALED(status)){
+                    // update pid status
+                    update_status(ret_pgid, "exited (SIGKILL)"); 
+                } else {
+                    perror("waitpid");
+                }
                 
                 // give terminal control back to the foreground process group
                 if (tcsetpgrp(STDIN_FILENO, getpgrp()) < 0){
@@ -263,7 +281,7 @@ int main() {
             } else if (strcmp(argv[0], "jobs") == 0) { 
                 procs.clear();
                 if (!jobtable.empty()){
-                    printf("JID\tSTAT\tCOMMAND\n"); 
+                    printf("JID\tSTAT\t\tCOMMAND\n"); 
                     for (auto val : jobtable){
                         printf("[%d] %s\t%s\n", val.pgid, val.status.c_str(), val.cmd.c_str()); 
                     }
@@ -387,15 +405,6 @@ int main() {
                     perror("fork"); 
                     exit(EXIT_FAILURE);
                 } else {
-                    /* if (bg && (i == 0)){ */
-                    /*     if (setpgid(pid, pid) == -1){ */
-                    /*         perror("setpgid"); */ 
-                    /*     } */
-
-                    /*     bg_pid = pid; */ 
-                    /*     addtotable(bg_pid, line); */ 
-                    /* } */ 
-                    
                     if (bg && (i == 0)){
                         bg_pid = pid;
                         addtotable(bg_pid, line);
@@ -418,7 +427,6 @@ int main() {
                         perror("tcsetpgrp");
                         exit(EXIT_FAILURE); 
                     }
-
                     handle_stop(pid, line); 
                 }
             }
@@ -538,10 +546,9 @@ void handle_bg(int signum){
     int status;
 
     while ((chld_pid = waitpid(-1, &status, WNOHANG | WUNTRACED)) > 0){
-        // print status info out of handler. save this data in a global structure of sorts 
         if (WIFEXITED(status)){
             // update pid status
-            update_status(chld_pid, "exited"); 
+            update_status(chld_pid, "exited (0)"); 
         } else if (WIFSTOPPED(status)){
             // update pid status
             update_status(chld_pid, "stopped"); 
@@ -571,10 +578,10 @@ void handle_stop(pid_t pgid, string cmd){
 }
 
 void handle_kill(int signum){
-    update_status(getpid(), "terminated");
+    update_status(getpid(), "exited (SIGKILL)");
 
     // send the kill signal (SIGKILL) to the pid (only the child should be calling this)
-    kill(getpid(), SIGKILL);
+    kill(getpid(), SIGINT);
 }
 
 void update_status(pid_t pgid, string status){
@@ -585,7 +592,7 @@ void update_status(pid_t pgid, string status){
             continue; 
         } else {
             job.status = status; 
-            printf("UPDATE: [%d] %s %s\n", job.pgid, job.cmd.c_str(), job.status.c_str());
+            printf("UPDATE: [%d]\t%s\t%s\n", job.pgid, job.cmd.c_str(), job.status.c_str());
         }
     }
 }
@@ -599,5 +606,5 @@ void addtotable(pid_t pgid, string cmd){
 
     jobtable.push_back(job);     
     
-    printf("\nADD: [%d] %s %s\n", job.pgid, job.cmd.c_str(), job.status.c_str());
+    printf("\nADD: [%d]\t%s\t%s\n", job.pgid, job.cmd.c_str(), job.status.c_str());
 }
